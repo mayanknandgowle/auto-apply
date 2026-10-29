@@ -2,6 +2,7 @@
   "name": "applypilot",
   "version": "0.2.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Supervised, local-first application assistant for Chrome and Edge",
   "packageManager": "pnpm@11.25.0",

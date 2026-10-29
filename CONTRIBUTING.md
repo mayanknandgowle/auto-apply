@@ -16,4 +16,4 @@ See [security](docs/SECURITY.md), [privacy](docs/PRIVACY.md), and [verification]
 
 ## License
 
-No open-source license has yet been selected. Contact the repository owner about reuse or distribution permissions.
+Contributions to ApplyPilot are made under the [MIT License](LICENSE). Bundled third-party components have their own notices in [THIRD_PARTY_NOTICES.txt](public/THIRD_PARTY_NOTICES.txt).

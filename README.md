@@ -4,8 +4,6 @@
 
 A local-first browser extension that helps you prepare job applications with verified information, reviewable resume edits, and explicit human control.
 
-![ApplyPilot application panel using synthetic data](docs/screenshots/application.png)
-
 > **Internal alpha:** Use synthetic data while evaluating. ApplyPilot does not navigate or submit applications for you. Live ATS and provider compatibility are still being validated.
 
 [Get started](#install-from-source) · [How it works](#how-it-works) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/IMPLEMENTATION_STATUS.md) · [Verification](docs/VERIFICATION.md) · [Contribute](CONTRIBUTING.md)
@@ -19,15 +17,25 @@ A standalone Chrome/Edge Manifest V3 extension. It runs without an ApplyPilot ac
 - **Tailor deliberately:** review resume evidence and individually approve changes before generating a PDF or DOCX.
 - **Keep the final say:** attach a selected resume explicitly and submit on the employer site yourself.
 
+## A closer look
+
+Four views, one supervised workflow. These captures use synthetic data.
+
+<table>
+  <tr><th>Apply</th><th>Profile</th></tr>
+  <tr><td><img src="docs/screenshots/application.png" alt="Apply view showing a synthetic application" width="420"></td><td><img src="docs/screenshots/profile.png" alt="Profile view with synthetic contact details" width="420"></td></tr>
+  <tr><th>Resume</th><th>Settings</th></tr>
+  <tr><td><img src="docs/screenshots/resume.png" alt="Resume view with a synthetic PDF" width="420"></td><td><img src="docs/screenshots/settings.png" alt="Settings view showing local storage options" width="420"></td></tr>
+</table>
+
 ## How it works
 
 ```mermaid
 flowchart LR
-    A["Confirm profile"] --> B["Inspect application"]
-    B --> C["Review and fill supported fields"]
-    C --> D["Review and attach resume"]
-    D --> E["You continue and submit"]
-    E --> F["Save an optional receipt"]
+    A["Confirm profile"] --> B["Inspect and review fields"]
+    B --> C["Fill supported fields"]
+    C --> D["Optionally attach resume"]
+    D --> E["You navigate and submit"]
 ```
 
 Each page is inspected before filling. You review unresolved questions, choose any resume attachment explicitly, and remain responsible for navigating and submitting on the employer site. Upload acceptance is not verified by the extension.
@@ -121,3 +129,7 @@ pnpm zip
 `pnpm fixtures` serves synthetic forms on loopback only. Browser tests use the release JavaScript plus a test-only localhost grant and open the panel HTML in a tab. They do not establish physical side-panel placement or toolbar-grant behavior. No test submits a real application.
 
 See [privacy](docs/PRIVACY.md), [security](docs/SECURITY.md), [requirement coverage](docs/REQUIREMENTS.md) and [release gates](docs/RELEASE_CHECKLIST.md). The original [production specification](PRODUCTION_BUILD_PROMPT.md) and [architecture plan](ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md) remain the full contract.
+
+## License
+
+ApplyPilot is available under the [MIT License](LICENSE). Bundled third-party software and fonts retain their own licenses; see [third-party notices](public/THIRD_PARTY_NOTICES.txt).
