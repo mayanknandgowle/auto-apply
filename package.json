@@ -1,0 +1,46 @@
+{
+  "name": "applypilot",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Supervised, local-first application assistant for Chrome and Edge",
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "build:edge": "wxt build -b edge",
+    "zip": "wxt zip",
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "fixtures": "node tests/fixtures/server.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm check:bundle",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "dexie": "4.4.7",
+    "docx": "9.15.0",
+    "mammoth": "1.13.0",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.4.299",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1",
+    "@types/chrome": "0.3.7",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@wxt-dev/module-react": "1.2.2",
+    "fake-indexeddb": "6.2.6",
+    "jsdom": "30.1.3",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
+    "wxt": "0.21.5"
+  }
+}

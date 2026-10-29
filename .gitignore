@@ -1,0 +1,10 @@
+node_modules/
+.wxt/
+.output/
+test-results/
+playwright-report/
+.browser-test-profile/
+.env*
+!.env.example
+*.tsbuildinfo
+dependency-licenses.json

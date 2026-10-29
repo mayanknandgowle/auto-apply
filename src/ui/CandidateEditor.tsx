@@ -1,0 +1,43 @@
+import { useState } from 'react';
+import { Candidate, experienceMonths } from '../core/candidate';
+import type { PanelProps } from './types';
+type Section = 'employment' | 'education' | 'projects' | 'compensation' | 'authorization';
+type Field = { key: string; label: string; options?: string[]; multi?: boolean };
+const fields: Record<Section, Field[]> = {
+  employment: [{key:'employer',label:'Employer'}, {key:'title',label:'Job title'}, {key:'kind',label:'Employment type',options:['professional','contract','internship']}, {key:'start',label:'Start date (YYYY or YYYY-MM)'}, {key:'end',label:'End date (blank if current)'}, {key:'location',label:'Work location'}, {key:'description',label:'Verified responsibilities and results',multi:true}],
+  education: [{key:'institution',label:'Institution'}, {key:'degree',label:'Degree'}, {key:'specialization',label:'Specialization'}, {key:'start',label:'Education start (optional)'}, {key:'end',label:'Education end (optional)'}, {key:'status',label:'Education status',options:['completed','in-progress','not-completed']}, {key:'grade',label:'Original grade'}, {key:'gradeScale',label:'Original grade scale'}],
+  projects: [{key:'title',label:'Project name'}, {key:'role',label:'Project role'}, {key:'tools',label:'Tools (comma separated)'}, {key:'description',label:'Verified project description',multi:true}, {key:'start',label:'Project start (optional)'}, {key:'end',label:'Project end (optional)'}],
+  compensation: [{key:'kind',label:'Compensation type',options:['current','expected']}, {key:'status',label:'Compensation status',options:['unknown','known','declined','not-applicable']}, {key:'amount',label:'Amount (known only)'}, {key:'currency',label:'Currency (three-letter code)'}, {key:'period',label:'Pay period',options:['annual','monthly']}, {key:'basis',label:'Compensation basis',options:['fixed','total']}, {key:'grossNet',label:'Gross or net',options:['unknown','gross','net']}],
+  authorization: [{key:'country',label:'Authorization country'}, {key:'currentPermission',label:'Current work permission',options:['unknown','yes','no','declined']}, {key:'futureSponsorship',label:'Future sponsorship needed',options:['unknown','yes','no','declined']}, {key:'effectiveDate',label:'Confirmed as of (YYYY-MM-DD)'}]
+};
+const labels: Record<Section,string> = { employment:'Employment', education:'Education', projects:'Projects', compensation:'Compensation', authorization:'Work authorization' };
+function blanks(section: Section) { return Object.fromEntries(fields[section].map(f => [f.key, f.options?.[0] ?? ''])); }
+export function CandidateEditor({ state, busy, raw, perform }: PanelProps) {
+  const [section, setSection] = useState<Section>('employment'), [draft, setDraft] = useState<Record<string,string>>(() => blanks('employment'));
+  const [editing, setEditing] = useState<string | null>(null), [skills, setSkills] = useState(state.profile.candidate.skills.join(', '));
+  const [noticeStatus,setNoticeStatus]=useState(state.profile.candidate.notice?.status??'unknown');
+  const [noticeDays,setNoticeDays]=useState(String(state.profile.candidate.notice?.days??''));
+  const [negotiable,setNegotiable]=useState(state.profile.candidate.notice?.negotiable??'unknown');
+  const candidate = state.profile.candidate;
+  const months = experienceMonths(candidate.employment, new Date().toISOString().slice(0,7));
+  const internships = experienceMonths(candidate.employment, new Date().toISOString().slice(0,7), 'internship');
+  async function save() {
+    const old = candidate[section].find(e => e.id === editing);
+    const entry: Record<string, unknown> = { ...draft, id: editing ?? crypto.randomUUID(), source: 'Manual confirmation', confirmedAt: new Date().toISOString(), revision: (old?.revision ?? 0) + 1 };
+    if (section === 'employment') { entry.current = !draft.end; entry.end = draft.end || null; }
+    if (section === 'education' || section === 'projects') { entry.start = draft.start || null; entry.end = draft.end || null; }
+    if (section === 'projects') entry.tools = (draft.tools ?? '').split(',').map(s => s.trim()).filter(Boolean);
+    if (section === 'compensation') { entry.amount = draft.amount?.trim() ? Number(draft.amount) : null; entry.currency = draft.currency?.toUpperCase(); }
+    const parsed = Candidate.safeParse({ ...candidate, [section]: [...candidate[section].filter(e => e.id !== editing), entry] });
+    if (!parsed.success) throw new Error(parsed.error.issues.map(i => `${i.path.slice(2).join('.')}: ${i.message}`).join('; '));
+    await raw({ type: 'CANDIDATE', candidate: parsed.data }); setEditing(null); setDraft(blanks(section));
+  }
+  return <section className="card"><h2>Structured career details</h2><p>Keep internships, projects and employment distinct. Dates can retain year-only precision. Compensation and authorization are stored for your review; ambiguous website questions still require your answer.</p>
+    <div className="metrics"><div><strong>{months.months ?? 'Unknown'}</strong><span>professional months</span></div><div><strong>{internships.months ?? 'Unknown'}</strong><span>internship months</span></div></div><p className="fine">{months.reason}</p>
+    <label>Career section<select aria-label="Career section" value={section} onChange={e => { const s = e.target.value as Section; setSection(s); setDraft(blanks(s)); setEditing(null); }}>{Object.entries(labels).map(([key,label]) => <option value={key} key={key}>{label}</option>)}</select></label>
+    {candidate[section].map(entry => <article className="evidence" key={entry.id}><strong>{Object.entries(entry).filter(([k]) => fields[section].some(f => f.key === k)).map(([,v]) => Array.isArray(v) ? v.join(', ') : String(v ?? '')).filter(Boolean).join(' · ')}</strong><p className="fine">Confirmed {entry.confirmedAt.slice(0,10)} · revision {entry.revision}</p><button className="text-button" disabled={busy} onClick={() => { setEditing(entry.id); setDraft(Object.fromEntries(fields[section].map(f => { const value = (entry as Record<string,unknown>)[f.key]; return [f.key, Array.isArray(value) ? value.join(', ') : String(value ?? '')]; }))); }}>Edit record</button><button className="text-button" disabled={busy} onClick={() => void perform(() => raw({ type:'CANDIDATE', candidate: { ...candidate, [section]: candidate[section].filter(e => e.id !== entry.id) } }))}>Remove record</button></article>)}
+    <form onSubmit={e => { e.preventDefault(); void perform(save); }}><h3>{editing ? 'Review changes' : `Add ${labels[section].toLowerCase()}`}</h3>{fields[section].map(field => <label key={field.key}>{field.label}{field.options ? <select aria-label={field.label} value={draft[field.key] ?? ''} onChange={e => setDraft({...draft,[field.key]:e.target.value})}>{field.options.map(o => <option key={o}>{o}</option>)}</select> : field.multi ? <textarea aria-label={field.label} rows={4} maxLength={4000} value={draft[field.key] ?? ''} onChange={e => setDraft({...draft,[field.key]:e.target.value})}/> : <input value={draft[field.key] ?? ''} maxLength={200} onChange={e => setDraft({...draft,[field.key]:e.target.value})}/>}</label>)}<button disabled={busy}>Confirm career record</button></form>
+    <label>Confirmed skills (comma separated)<input value={skills} onChange={e => setSkills(e.target.value)} maxLength={5000}/></label><button disabled={busy} onClick={() => void perform(() => raw({type:'CANDIDATE',candidate:{...candidate,skills:skills.split(',').map(s=>s.trim()).filter(Boolean)}}))}>Save skills</button>
+    <details><summary>Notice period</summary><p>Unknown and declined are distinct from zero days. Keep a contractual period separate from any negotiable earlier start.</p><label>Notice status<select aria-label="Notice status" value={noticeStatus} onChange={e=>{setNoticeStatus(e.target.value as typeof noticeStatus);setNoticeDays('');}}>{['unknown','known','declined','not-applicable'].map(s=><option key={s}>{s}</option>)}</select></label><label>Contractual notice days<input type="number" min={0} max={730} disabled={noticeStatus!=='known'} value={noticeDays} onChange={e=>setNoticeDays(e.target.value)}/></label><label>Earlier start negotiable<select aria-label="Earlier start negotiable" value={negotiable} onChange={e=>setNegotiable(e.target.value as typeof negotiable)}>{['unknown','yes','no'].map(s=><option key={s}>{s}</option>)}</select></label><button disabled={busy||(noticeStatus==='known'&&!noticeDays)} onClick={()=>void perform(()=>raw({type:'CANDIDATE',candidate:{...candidate,notice:{status:noticeStatus,days:noticeStatus==='known'?Number(noticeDays):null,negotiable,confirmedAt:new Date().toISOString()}}}))}>Confirm notice period</button></details>
+  </section>;
+}

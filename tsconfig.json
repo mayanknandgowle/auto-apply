@@ -1,0 +1,13 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "include": ["src", "tests", "*.config.ts"],
+  "exclude": ["node_modules", ".output", "test-results", "playwright-report"],
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["chrome", "node", "vite/client"],
+    "jsx": "react-jsx"
+  }
+}
