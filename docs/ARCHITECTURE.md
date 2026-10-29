@@ -1,6 +1,6 @@
 # Architecture and data flow
 
-This document describes the **implemented v0.2.0 internal alpha**. For proposed work, see the [implementation status](IMPLEMENTATION_STATUS.md) and the original [architecture and implementation plan](../ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md).
+This document describes the **implemented v0.2.0 internal alpha**. For proposed work, see the [implementation status](IMPLEMENTATION_STATUS.md).
 
 ## Components and trust boundaries
 

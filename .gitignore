@@ -8,3 +8,6 @@ playwright-report/
 !.env.example
 *.tsbuildinfo
 dependency-licenses.json
+
+/PRODUCTION_BUILD_PROMPT.md
+/ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md

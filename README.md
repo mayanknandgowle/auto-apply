@@ -128,7 +128,7 @@ pnpm zip
 
 `pnpm fixtures` serves synthetic forms on loopback only. Browser tests use the release JavaScript plus a test-only localhost grant and open the panel HTML in a tab. They do not establish physical side-panel placement or toolbar-grant behavior. No test submits a real application.
 
-See [privacy](docs/PRIVACY.md), [security](docs/SECURITY.md), [requirement coverage](docs/REQUIREMENTS.md) and [release gates](docs/RELEASE_CHECKLIST.md). The original [production specification](PRODUCTION_BUILD_PROMPT.md) and [architecture plan](ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md) remain the full contract.
+See [privacy](docs/PRIVACY.md), [security](docs/SECURITY.md), [requirement coverage](docs/REQUIREMENTS.md) and [release gates](docs/RELEASE_CHECKLIST.md).
 
 ## License
 
