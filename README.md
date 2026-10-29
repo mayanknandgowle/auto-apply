@@ -31,7 +31,7 @@ Four views, one supervised workflow. These captures use synthetic data.
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TD
     A["Confirm profile"] --> B["Inspect and review fields"]
     B --> C["Fill supported fields"]
     C --> D["Optionally attach resume"]
