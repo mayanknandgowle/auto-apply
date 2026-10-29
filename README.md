@@ -8,11 +8,9 @@ A local-first browser extension that helps you prepare job applications with ver
 
 > **Internal alpha:** Use synthetic data while evaluating. ApplyPilot does not navigate or submit applications for you. Live ATS and provider compatibility are still being validated.
 
-[Get started](#install-from-source) · [How it works](#apply-with-supervision) · [Roadmap](docs/IMPLEMENTATION_STATUS.md) · [Verification](docs/VERIFICATION.md) · [Contribute](CONTRIBUTING.md)
+[Get started](#install-from-source) · [How it works](#how-it-works) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/IMPLEMENTATION_STATUS.md) · [Verification](docs/VERIFICATION.md) · [Contribute](CONTRIBUTING.md)
 
-A standalone Chrome/Edge Manifest V3 application assistant. Version **0.2.0 is an internal alpha**. It runs locally, without an ApplyPilot account, backend, companion app or end-user Node installation.
-
-This milestone adds saved encrypted profiles, structured career records, reviewed import rollback, scoped answer reuse, resume evidence assessment, PDF/DOCX derivatives, explicit native resume attachment, optional provider choices and receipts. See [verification](docs/VERIFICATION.md), [support](docs/SUPPORT_MATRIX.md) and [remaining milestones](docs/IMPLEMENTATION_STATUS.md).
+A standalone Chrome/Edge Manifest V3 extension. It runs without an ApplyPilot account, backend, or companion app.
 
 ## Why ApplyPilot?
 
@@ -20,6 +18,34 @@ This milestone adds saved encrypted profiles, structured career records, reviewe
 - **Own your data:** work in a session or opt into an encrypted saved profile and encrypted backups.
 - **Tailor deliberately:** review resume evidence and individually approve changes before generating a PDF or DOCX.
 - **Keep the final say:** attach a selected resume explicitly and submit on the employer site yourself.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["Confirm profile"] --> B["Inspect application"]
+    B --> C["Review and fill supported fields"]
+    C --> D["Review and attach resume"]
+    D --> E["You continue and submit"]
+    E --> F["Save an optional receipt"]
+```
+
+Each page is inspected before filling. You review unresolved questions, choose any resume attachment explicitly, and remain responsible for navigating and submitting on the employer site. Upload acceptance is not verified by the extension.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    User(["You"]) --> UI["Extension panel"]
+    UI <--> Coordinator["Background coordinator"]
+    Coordinator <--> Store["Encrypted local state"]
+    Coordinator <--> Driver["Isolated page driver"]
+    Driver <--> Site["Application page"]
+    UI --> Docs["Local PDF / DOCX processing"]
+    UI -. "optional, with consent" .-> AI["Chosen AI provider"]
+```
+
+The coordinator validates and journals actions before the driver interacts with supported page controls. Documents are processed locally; provider transfers happen only when configured and approved. See the [architecture and data flow](docs/ARCHITECTURE.md) for trust boundaries, a sequence diagram and the code map.
 
 ## Install from source
 
@@ -95,4 +121,3 @@ pnpm zip
 `pnpm fixtures` serves synthetic forms on loopback only. Browser tests use the release JavaScript plus a test-only localhost grant and open the panel HTML in a tab. They do not establish physical side-panel placement or toolbar-grant behavior. No test submits a real application.
 
 See [privacy](docs/PRIVACY.md), [security](docs/SECURITY.md), [requirement coverage](docs/REQUIREMENTS.md) and [release gates](docs/RELEASE_CHECKLIST.md). The original [production specification](PRODUCTION_BUILD_PROMPT.md) and [architecture plan](ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md) remain the full contract.
-
