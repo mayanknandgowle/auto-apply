@@ -6,7 +6,7 @@ export default defineConfig({
   manifest: {
     name: 'ApplyPilot — application assistant',
     description: 'Fill verified profile details with supervision. Pause, review, and stay in control.',
-    version: '0.2.0',
+    version: '0.2.1',
     minimum_chrome_version: '142',
     permissions: ['activeTab', 'scripting', 'storage', 'sidePanel', 'alarms'],
     optional_host_permissions: ['https://*/*'],

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { Envelope, initialState, publicState, selectedResume, type State, type Session, type Journal } from '../core/model';
-import { explanation, manualOnly, resolveValue, trustedUi } from '../core/policy';
+import { explanation, manualOnly, hasValue, resolveValue, trustedUi } from '../core/policy';
+import { appendJobSource, captureJobSource } from '../core/job-sources';
+import { reconcile, writeBlocked, sensitiveQuestion } from '../core/recovery';
 import { readState as readStoredState, writeState, endSession, lockVault, touchVault, createVault, unlockVault, changePassphrase, exportBackup, previewBackup, restoreBackup, deleteAllData } from '../storage/repository';
 import { emptyJob, makeMemory, memoryMatch } from '../core/reuse';
 import { careerEvidence } from '../core/candidate';
@@ -35,7 +37,7 @@ export class Coordinator {
     if (this.initialized) return;
     this.initialized = true;
     const state = await readState();
-    if (state.session?.state === 'filling') {
+    if (state.session) {
       this.pauseState(state.session, 'Worker restarted. Inspect the page before resuming; pending writes will not be repeated.');
       await this.commit(state);
     }
@@ -108,8 +110,13 @@ export class Coordinator {
         this.refreshPanels(true); return { state: publicState(state) };
       }
       if (state.storage.locked) throw new Error('Unlock your saved profile before continuing.');
+      // Report the actionable wrong-tab boundary even when its interrupt also changed revision.
+      if (command.type === 'START' && state.session) await this.assertActive(state.session);
       if (command.type === 'DOWNLOAD_RESUME') { const artifact=selectedResume(state);if(!artifact)throw new Error('Select a resume first.');return {state:publicState(state),artifact}; }
-      if (message.expectedRevision !== state.revision && command.type !== 'PAUSE') throw new Error('The session changed. Refresh and try again.');
+      // Navigation interrupts may reach the worker before the panel refresh.
+      // Inspection reads the latest page without writing to it; mutations still
+      // require an exact revision, and continuation binds its application below.
+      if (message.expectedRevision !== state.revision && !['PAUSE', 'INSPECT'].includes(command.type)) throw new Error('The session changed. Refresh and try again.');
       if (!['TICK', 'AI_RESULT'].includes(command.type)) await touchVault();
       if (state.requestIds.includes(message.requestId)) throw new Error('This command was already handled. Refresh first.');
       state.requestIds = [...state.requestIds, message.requestId].slice(-100);
@@ -133,29 +140,46 @@ export class Coordinator {
           break;
         }
         case 'INSPECT': {
+          if (command.continueApplication && command.sessionId !== state.session?.id) throw new Error('The application changed. Inspect it as a new application before continuing.');
           const tab = await activeTab();
-          const snapshot = await inspectTab(tab.id);
+          const snapshot = await inspectTab(tab.id, state.adaptersEnabled);
           const existing = state.session;
           const same = existing?.tabId === tab.id && existing.origin === new URL(snapshot.url).origin && existing.url === snapshot.url;
+          const continuation = !!command.continueApplication && !!existing && existing.tabId === tab.id && existing.origin === new URL(snapshot.url).origin;
+          if (command.continueApplication && !continuation) throw new Error('Continue only in the same tab and origin. Save a receipt and inspect a new application after an origin change.');
+          if (continuation && existing.snapshot.adapter && snapshot.adapter && existing.snapshot.adapter.identity !== snapshot.adapter.identity) throw new Error('This is a different job. Inspect it as a new application.');
+          const keep = !!existing && (same || continuation);
+          if (existing && !keep && (existing.journal.length || existing.uploads.length)) {
+            await profileCommand(state, {type:'SAVE_RECEIPT',userReported:false});
+          }
           if(state.job.url && state.job.url!==snapshot.url)state.job={...emptyJob(),revision:state.job.revision+1};
           if(existing && !same && !snapshot.jobText){state.jobText='';state.assessment=null;}
-          const journal = same ? existing.journal : [];
-          // An interrupted intent is reconciled, never blindly retried.
-          for (const entry of journal.filter(e => e.status === 'intent')) {
-            const control = snapshot.controls.find(c => c.id === entry.controlId && c.fingerprint === entry.fingerprint);
-            entry.status = snapshot.documentToken === entry.documentToken && control?.value === entry.after && !control.invalid ? 'verified' : 'uncertain';
-          }
-          state.session = { id: same ? existing.id : crypto.randomUUID(), tabId: tab.id, origin: new URL(snapshot.url).origin, url: snapshot.url, title: snapshot.heading, state: 'ready', generation: (existing?.generation ?? 0) + 1, snapshot, decisions: [], journal, approved: {}, uploads:same?existing.uploads:[], note: 'Page inspected. No fields have been changed by this inspection.', startedAt: same ? existing.startedAt : new Date().toISOString(), mode: existing?.mode ?? 'autofill' };
+          if (keep) reconcile(existing, snapshot);
+          const steps = keep ? [...existing.steps] : [];
+          if (!steps.length || steps[steps.length-1]!.url !== snapshot.url) steps.push({url:snapshot.url,at:new Date().toISOString()});
+          if (steps.length > 50) throw new Error('Application step limit reached. Save a receipt and finish manually.');
+          state.session = { id: keep ? existing.id : crypto.randomUUID(), tabId: tab.id, origin: new URL(snapshot.url).origin, url: snapshot.url, title: snapshot.heading, state: 'ready', generation: (existing?.generation ?? 0) + 1, snapshot, decisions: same ? existing.decisions : [], journal:keep?existing.journal:[], approved: {}, uploads:keep?existing.uploads:[], steps, note: 'Page inspected. No fields have been changed by this inspection.', startedAt: keep ? existing.startedAt : new Date().toISOString(), mode: existing?.mode ?? 'autofill' };
           this.decisions(state.session, state);
-          if (snapshot.jobText && snapshot.jobText !== state.jobText) { state.jobText = snapshot.jobText; state.assessment = null; }
+          if (snapshot.jobText && snapshot.jobText !== state.jobText) {
+            state.jobText = snapshot.jobText; state.assessment = null;
+            state.jobSources = appendJobSource(state.jobSources, captureJobSource(snapshot.jobText, snapshot.adapter ? 'application' : 'unclassified-page', snapshot.url));
+          }
           break;
+        }
+        case 'ADAPTERS': state.adaptersEnabled=command.enabled; if(state.session)this.pauseState(state.session,'Adapter setting changed. Inspect again.'); break;
+        case 'DECISION': {
+          const session=this.requireSession(state);
+          if(session.state==='filling')throw new Error('Pause before changing decisions.');
+          const decision=session.decisions.find(d=>d.control.id===command.controlId);
+          if(!decision)throw new Error('Inspect this question again.');
+          decision.resolution=command.resolution;delete session.approved[command.controlId];break;
         }
         case 'START': {
           const session = this.requireSession(state);
           await this.assertActive(session);
           if (!this.panels.size) throw new Error('Keep the ApplyPilot panel open while filling.');
-          const snapshot = await inspectTab(session.tabId);
-          if (snapshot.url !== session.url || snapshot.documentToken !== session.snapshot.documentToken) throw new Error('The page changed. Inspect this step before starting.');
+          const snapshot = await inspectTab(session.tabId, state.adaptersEnabled);
+          if (snapshot.url !== session.url || snapshot.documentToken !== session.snapshot.documentToken || snapshot.heading!==session.snapshot.heading || snapshot.jobText!==session.snapshot.jobText) throw new Error('The page changed. Inspect this step before starting.');
           session.snapshot = snapshot; session.state = 'filling'; session.mode = command.mode; session.generation++;
           session.note = 'Filling one verified field at a time. The site may autosave entries.';
           await sendDriver(session.tabId, { type: 'BIND', sessionId: session.id, generation: session.generation, documentToken: snapshot.documentToken });
@@ -176,10 +200,13 @@ export class Coordinator {
           const session = this.requireSession(state);
           const decision = session.decisions.find(d => d.control.id === command.controlId);
           if (!decision || manualOnly(decision.control)) throw new Error('Complete this question on the website.');
-          if (decision.control.value) throw new Error('This field already contains an answer. Edit it on the website.');
+          if(sensitiveQuestion(decision.control.label)&&!command.retainSensitive)throw new Error('Choose whether to retain this sensitive answer in the encrypted application journal, or answer directly on the website.');
+          if (hasValue(decision.control)) throw new Error('This field already contains an answer. Edit it on the website.');
+          if (decision.control.choice && command.value !== 'true') throw new Error('Select the exact displayed choice; existing selections stay manual.');
           if (!command.value.trim()) throw new Error('Enter an answer or complete it on the website.');
           if (decision.control.kind === 'select' && !decision.control.options.some(o => o.value === command.value)) throw new Error('Select one of the exact options.');
           session.approved[command.controlId] = { value: command.value, fingerprint: decision.control.fingerprint, documentToken: session.snapshot.documentToken };
+          decision.resolution='pending';
           if (command.remember) {
             const memory = makeMemory(decision.control, command.value, state);
             state.memory = [...state.memory.filter(m => !(m.question === memory.question && m.origin === memory.origin && m.company === memory.company && m.role === memory.role && m.country === memory.country)), memory].slice(-200);
@@ -191,7 +218,7 @@ export class Coordinator {
         case 'ATTACH_RESUME': await this.attach(state,command.controlId,command.hash);break;
         case 'RESUME_FILE': state.resume = command.resume; state.selectedVariant=null;state.variants=[]; state.assessment = null; if (state.session) this.pauseState(state.session, 'Selected resume changed. Review and upload the selected file manually.'); break;
         case 'DELETE_RESUME': state.resume = null; state.selectedVariant=null;state.variants=[];state.assessment = null; break;
-        case 'JOB': state.jobText = command.text; state.assessment = null; if (state.session) this.pauseState(state.session, 'Job description updated. Inspect again before continuing.'); break;
+        case 'JOB': state.jobText = command.text; state.jobSources=appendJobSource(state.jobSources,captureJobSource(command.text,'user-provided')); state.assessment = null; state.job={...state.job,confirmed:false,revision:state.job.revision+1}; if (state.session) this.pauseState(state.session, 'Job description updated. Inspect again before continuing.'); break;
         case 'PROVIDER':
           if (!/^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,119}$/.test(command.model) || command.model.includes('://')) throw new Error('Enter a model ID, without a URL.');
           if (!await chrome.permissions.contains({origins:[`${new URL(providerUrl(command)).origin}/*`]})) throw new Error('Grant access to the selected provider first.');
@@ -202,7 +229,7 @@ export class Coordinator {
           const session = this.requireSession(state);
           await this.assertActive(session);
           const decision = session.decisions.find(d => d.control.id === command.controlId);
-          if (!decision || !['textarea', 'text'].includes(decision.control.kind) || manualOnly(decision.control)) throw new Error('This question needs your own answer.');
+          if (!decision || !['textarea', 'text'].includes(decision.control.kind) || manualOnly(decision.control) || sensitiveQuestion(decision.control.label)) throw new Error('This question needs your own answer.');
           const evidence = [...state.profile.evidence, ...careerEvidence(state.profile.candidate)];
           if (!state.provider.configured || !evidence.length) throw new Error('Add confirmed career evidence in Profile and configure Gemini first.');
           if (state.aiRequests >= 5) throw new Error('This session has reached its 5-request drafting limit. Manual answers remain available.');
@@ -230,12 +257,13 @@ export class Coordinator {
   private async attach(state:State,controlId:string,hash:string) {
     const session=this.requireSession(state),artifact=selectedResume(state),epoch=this.interrupted;
     if(!artifact || artifact.hash!==hash || session.state==='filling' || !this.panels.size)throw new Error('Pause, select the exact resume, and review the upload first.');
-    if(session.uploads.length>=20 || session.uploads.some(u=>u.controlId===controlId&&u.documentToken===session.snapshot.documentToken))throw new Error('This attachment already has an attempt. Inspect the visible result and finish manually; no automatic retry.');
-    await this.assertActive(session);const snapshot=await inspectTab(session.tabId);
+    if(session.uploads.length>=20 || session.uploads.some(u=>u.hash===hash || (u.controlId===controlId&&u.documentToken===session.snapshot.documentToken)))throw new Error('This attachment already has an attempt in this application. Inspect the visible result and finish manually; no automatic retry.');
+    await this.assertActive(session);const snapshot=await inspectTab(session.tabId,state.adaptersEnabled);
     const old=session.snapshot.controls.find(c=>c.id===controlId),control=snapshot.controls.find(c=>c.id===controlId);
     if(snapshot.url!==session.url || snapshot.documentToken!==session.snapshot.documentToken || !old || !control || old.fingerprint!==control.fingerprint || !resumeUploadControl(control) || control.file?.name || !acceptsFile(control.file?.accept??'',artifact.name,artifact.mime))throw new Error('Upload control changed, contains a file, or does not accept this format. Complete it manually.');
     session.snapshot=snapshot;session.state='paused';session.generation++;session.approved={};
-    const upload={id:crypto.randomUUID(),controlId,documentToken:snapshot.documentToken,hash:artifact.hash,name:artifact.name,status:'intent' as 'intent'|'attached-unverified'|'uncertain',at:new Date().toISOString()};session.uploads.push(upload);await this.commit(state);
+    if(session.uploads.some(u=>u.fingerprint===control.fingerprint))throw new Error('This upload surface already has an attempt. Complete it manually.');
+    const upload={id:crypto.randomUUID(),controlId,documentToken:snapshot.documentToken,hash:artifact.hash,name:artifact.name,status:'intent' as 'intent'|'attached-unverified'|'uncertain',at:new Date().toISOString(),url:session.url,fingerprint:control.fingerprint};session.uploads.push(upload);await this.commit(state);
     try {
       if(epoch!==this.interrupted || !this.panels.size)throw new Error('Interrupted');await this.assertActive(session);
       await sendDriver(session.tabId,{type:'BIND',sessionId:session.id,generation:session.generation,documentToken:snapshot.documentToken});
@@ -250,19 +278,24 @@ export class Coordinator {
     if (tab.id !== session.tabId || tab.url !== session.url) throw new Error('Return to the bound application and inspect again. The target tab or page has changed.');
   }
   private decisions(session: Session, state: State) {
+    const previous=session.decisions;
     session.decisions = session.snapshot.controls.filter(c => {
+      if(writeBlocked(session,c)) return true;
       if (c.kind === 'file' || c.kind === 'unsupported' || c.kind === 'checkbox' || c.kind === 'radio') return true;
       const duplicated = session.snapshot.controls.filter(other => other.label === c.label).length > 1;
-      return (!c.value || c.invalid) && (duplicated || !(resolveValue(c, state.profile) ?? memoryMatch(c, state)?.answer));
-    }).map(control => ({ control, reason: explanation(control) }));
+      return (!hasValue(c) || c.invalid) && (duplicated || !(resolveValue(c, state.profile) ?? memoryMatch(c, state)?.answer));
+    }).map(control => {
+      const old=previous.find(d=>d.control.id===control.id&&d.control.fingerprint===control.fingerprint);
+      return {control,reason:writeBlocked(session,control)?'A previous write has an uncertain outcome. Check and complete this field on the website; ApplyPilot will not repeat it.':explanation(control),...(old?{resolution:old.resolution,draft:old.draft,evidenceIds:old.evidenceIds}:{})};
+    });
   }
   private async tick(state: State) {
     const session = this.requireSession(state);
     if (session.state !== 'filling' || !this.panels.size) return;
     const epoch = this.interrupted;
     await this.assertActive(session);
-    const snapshot = await inspectTab(session.tabId);
-    if (snapshot.documentToken !== session.snapshot.documentToken || snapshot.url !== session.url) {
+    const snapshot = await inspectTab(session.tabId,state.adaptersEnabled);
+    if (snapshot.documentToken !== session.snapshot.documentToken || snapshot.url !== session.url || snapshot.heading!==session.snapshot.heading || snapshot.jobText!==session.snapshot.jobText) {
       this.pauseState(session, 'Page changed. Inspect the new step before resuming.'); return;
     }
     session.snapshot = snapshot;
@@ -272,7 +305,7 @@ export class Coordinator {
       const duplicate = snapshot.controls.filter(c => c.label === control.label).length > 1;
       const value = exactApproval ? approved.value : !duplicate ? resolveValue(control, state.profile) ?? memoryMatch(control, state)?.answer : undefined;
       return { control, value };
-    }).find(({ control, value }) => !manualOnly(control) && !control.value && value !== undefined && !session.journal.some(j => j.controlId === control.id && j.documentToken === snapshot.documentToken && ['uncertain', 'intent'].includes(j.status)));
+    }).find(({ control, value }) => !manualOnly(control) && !hasValue(control) && value !== undefined && !writeBlocked(session,control) && !session.decisions.some(d=>d.control.id===control.id&&['deferred','unknown'].includes(d.resolution??'')));
     if (!next) {
       this.decisions(session, state);
       if (!snapshot.controls.length) {
@@ -286,7 +319,7 @@ export class Coordinator {
     }
     if (epoch !== this.interrupted || !this.panels.size) { this.pauseState(session, 'Execution paused before the next field.'); return; }
     const { control, value } = next;
-    const action: Journal = { id: crypto.randomUUID(), controlId: control.id, label: control.label, before: control.value, after: value!, fingerprint: control.fingerprint, documentToken: snapshot.documentToken, status: 'intent', at: new Date().toISOString() };
+    const action: Journal = { id: crypto.randomUUID(), controlId: control.id, label: control.label, before: control.value, after: value!, fingerprint: control.fingerprint, documentToken: snapshot.documentToken, status: 'intent', at: new Date().toISOString(), url:session.url };
     if (session.journal.length >= 499) throw new Error('Application action limit reached. Start a new session.');
     session.journal.push(action);
     await this.commit(state); // Intent is durable before dispatch.
@@ -308,11 +341,11 @@ export class Coordinator {
     if (session.state === 'filling') throw new Error('Pause before undoing a field.');
     const action = session.journal.find(j => j.id === actionId && j.status === 'verified');
     if (!action) throw new Error('That action is unavailable.');
-    const snapshot = await inspectTab(session.tabId);
+    const snapshot = await inspectTab(session.tabId,state.adaptersEnabled);
     const control = snapshot.controls.find(c => c.id === action.controlId);
     if (snapshot.documentToken !== action.documentToken || !control || control.fingerprint !== action.fingerprint || control.value !== action.after) throw new Error('The field has changed. Your newer edit was preserved.');
     await sendDriver(session.tabId, { type: 'BIND', sessionId: session.id, generation: session.generation, documentToken: snapshot.documentToken });
     const result = z.object({ verified: z.boolean(), value: z.string().optional() }).parse(await sendDriver(session.tabId, { type: 'WRITE', actionId: crypto.randomUUID(), sessionId: session.id, generation: session.generation, documentToken: snapshot.documentToken, snapshotId: snapshot.snapshotId, controlId: control.id, fingerprint: control.fingerprint, before: action.after, value: action.before, expiresAt: Date.now() + 2000, undo: true }));
-    action.status = result.verified ? 'undone' : 'uncertain'; session.snapshot = await inspectTab(session.tabId);
+    action.status = result.verified ? 'undone' : 'uncertain'; session.snapshot = await inspectTab(session.tabId,state.adaptersEnabled);
   }
 }

@@ -19,7 +19,7 @@ A standalone Chrome/Edge Manifest V3 extension. It runs without an ApplyPilot ac
 
 ## A closer look
 
-Four views, one supervised workflow. These captures use synthetic data.
+Four views, one supervised workflow. These historical v0.2.0 captures use synthetic data; v0.2.1 adds source review and recovery controls.
 
 <table>
   <tr><th>Apply</th><th>Profile</th></tr>
@@ -73,7 +73,7 @@ Then load the build:
 2. Load unpacked `.output/chrome-mv3` or `.output/edge-mv3`.
 3. Pin ApplyPilot. Open an application page and click its toolbar icon to open the panel and grant temporary page access.
 
-To create a local ZIP, run `pnpm zip`, extract `.output/applypilot-0.2.0-chrome.zip`, and load the extracted folder. Keep it in place. Never install `.output/chrome-test`, which has a localhost test grant.
+To create a local ZIP, run `pnpm zip`, extract `.output/applypilot-0.2.1-chrome.zip`, and load the extracted folder. Keep it in place. Never install `.output/chrome-test`, which has test-only host grants.
 
 Declared minimum: Chromium 142. Automated runtime testing uses Chromium 156; actual installed Chrome/Edge toolbar and minimum-version checks remain pending.
 
@@ -84,10 +84,14 @@ Declared minimum: Chromium 142. Automated runtime testing uses Chromium 156; act
 3. **Inspect current page** reads visible supported native controls without changing them. **Help me apply** fills empty fields and verifies each write. Assist mode stops after one field.
 4. Review unresolved questions. To reuse an answer, confirm the employer, role and country, then explicitly check the remember option. Reuse requires the same origin, exact question/options, current profile revision and unexpired scope. Confirm job context again for a changed page.
 5. For a clearly labeled, empty native resume input, review the selected filename and choose **Attach selected resume to this input**. This can immediately upload to the employer. The extension verifies local attachment only; check the website for processing errors or acceptance. Other uploads remain manual.
-6. Continue and submit on the website yourself. Inspect each new step. There is no automated navigation or submission capability.
+6. Continue and submit on the website yourself. Use **Inspect next step of this application** to explicitly link steps for the same job, tab and origin. **Inspect current step** starts a separate application when the URL changes and preserves a preparation receipt for previous work. There is no automated navigation or submission capability.
 7. Save a preparation receipt or explicitly mark **I submitted on the website**. User-reported submission is never represented as independently verified.
 
 Pause, tab changes, navigation, permission changes and panel closure stop further work. Already delivered values/files can be autosaved remotely. Undo only restores a field that still matches the extension's write. Uncertain writes and attachments are not blindly retried.
+
+## New in 0.2.1
+
+Reviewed native choice controls and open shadow roots, persistent deferred/unknown decisions, separate job-source review, explicit career imports, expanded profile fields and cross-step recovery are available. The narrow Lever interpreter is experimental and can be disabled in Settings; live mutations remain unvalidated. See the [requirement dispositions](docs/CONTINUATION_CHECKLIST.md) for exact scope and remaining gates.
 
 ## Saved profiles and backups
 

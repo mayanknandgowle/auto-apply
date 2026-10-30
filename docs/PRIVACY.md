@@ -1,6 +1,6 @@
 # ApplyPilot privacy notice — internal alpha draft
 
-29 October 2026 · version 0.2.0. Publisher identity and store/legal review are pending.
+30 October 2026 · version 0.2.1. Publisher identity and store/legal review are pending.
 
 ApplyPilot processes confirmed contact/career details, selected resume files, approved text changes, job descriptions, remembered answers, receipts and visible controls on an application page you authorize. It does not intentionally collect cookies, browsing history, passwords, OTPs, authentication tokens or other candidates' profiles.
 
@@ -15,6 +15,8 @@ Remembered answers expire after seven days for time-sensitive compensation/avail
 Optional Gemini, OpenAI and custom compatible providers receive requests directly from the extension. A connection test sends synthetic text. A reviewed draft request sends the displayed question, job description and confirmed career evidence. It excludes contact-profile fields and original resume files, but free text can still contain personal details. The configured provider receives the API key and approved content under its own data, quota and billing terms. There is no automatic fallback to another provider. Keys are not included in backups.
 
 Filling fields or explicitly attaching a selected resume can immediately transmit data to an employer through normal site behavior, including autosave/upload. ApplyPilot cannot retract remote copies. It verifies local attachment only; employer processing and final submission remain the user's responsibility. No automatic submission is available.
+
+Job sources retain separate captured text, URL and time until deleted. Career imports retain reviewed excerpts and rollback data; deleting their source clears those payloads while preserving confirmed facts with a source-deleted marker. Same-origin step continuation keeps one encrypted application journal. A new application preserves a preparation receipt of prior local activity. Already answered recognized sensitive fields are omitted from captured controls and left for review on the website. New answers to recognized sensitive questions require a separate journal-retention choice; their answers are omitted from receipts. Free-text questions and user evidence may still contain personal information that automatic classification cannot recognize. Saved journals persist encrypted until local data is deleted; receipt retention does not erase the active journal.
 
 Use Settings to lock/end the session, export/restore backups, revoke provider origins, or delete all local data by typing DELETE. Individual sources, answers, derivatives and receipts can also be removed. Browser removal follows the browser's extension-storage behavior.
 

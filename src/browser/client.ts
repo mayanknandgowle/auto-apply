@@ -10,7 +10,7 @@ export async function sendDriver(tabId: number, command: DriverCommand): Promise
   if (!response?.ok) throw new Error(response?.error || 'Unable to reach the page. Click the extension icon and inspect again.');
   return response.data;
 }
-export async function inspectTab(tabId: number) {
+export async function inspectTab(tabId: number, adaptersEnabled = true) {
   await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: ['driver.js'] });
-  return Snapshot.parse(await sendDriver(tabId, { type: 'INSPECT' }));
+  return Snapshot.parse(await sendDriver(tabId, { type: 'INSPECT', adaptersEnabled }));
 }

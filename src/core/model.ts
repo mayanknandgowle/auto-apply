@@ -3,6 +3,8 @@ import { Candidate } from './candidate';
 import { AnswerMemory, ImportedChange, JobContext, emptyJob } from './reuse';
 import { Assessment, Requirement } from './assessment';
 import { ResumeEdit } from '../documents/edits';
+import { JobSource } from './job-sources';
+import { CareerProposal } from '../documents/career-import';
 
 export const SCHEMA = 2;
 export const Provider = z.object({ kind: z.enum(['gemini', 'openai', 'compatible']).default('gemini'), endpoint: z.string().max(1000).default(''), model: z.string().max(120), configured: z.boolean() }).strict();
@@ -26,35 +28,37 @@ export const Control = z.object({
   kind: z.enum(['text', 'email', 'tel', 'url', 'number', 'date', 'textarea', 'select', 'checkbox', 'radio', 'file', 'unsupported']),
   autocomplete: z.string().max(100), required: z.boolean(), value: z.string().max(12000),
   options: z.array(z.object({ label: z.string().max(500), value: z.string().max(500) }).strict()).max(100),
-  maxLength: z.number().int(), invalid: z.boolean()
+  maxLength: z.number().int(), invalid: z.boolean(), disabled: z.boolean().optional(), validation: z.string().max(500).optional(),
+  choice: z.object({ question: z.string().max(1500), option: z.string().max(500), group: z.string().max(1000), selected: z.boolean(), writable: z.boolean() }).strict().optional()
   ,file:z.object({accept:z.string().max(500),name:z.string().max(200),size:z.number().int(),multiple:z.boolean()}).strict().optional()
 }).strict();
 export type Control = z.infer<typeof Control>;
 export const Snapshot = z.object({
   documentToken: z.string().uuid(), snapshotId: z.string().uuid(), url: z.string().url().max(3000), title: z.string().max(300),
   heading: z.string().max(300), jobText: z.string().max(16000), controls: z.array(Control).max(200),
-  warnings: z.array(z.string().max(300)).max(20), capturedAt: z.number()
+  warnings: z.array(z.string().max(300)).max(20), capturedAt: z.number(),
+  adapter: z.object({ id: z.literal('lever-hosted-v1'), identity: z.string().max(3000), stage: z.literal('application'), terminal: z.literal('manual') }).strict().optional()
 }).strict();
 export type Snapshot = z.infer<typeof Snapshot>;
 export const Journal = z.object({
   id: z.string().uuid(), controlId: z.string(), label: z.string().max(1500), before: z.string().max(12000), after: z.string().max(12000),
-  fingerprint: z.string().max(30000), documentToken: z.string().uuid(), status: z.enum(['intent', 'verified', 'uncertain', 'undone']), at: z.string()
+  fingerprint: z.string().max(30000), documentToken: z.string().uuid(), status: z.enum(['intent', 'verified', 'uncertain', 'undone']), at: z.string(), url: z.string().max(3000).optional()
 }).strict();
 export type Journal = z.infer<typeof Journal>;
-export const Upload = z.object({id:z.string().uuid(),controlId:z.string(),documentToken:z.string().uuid(),hash:z.string(),name:z.string().max(200),status:z.enum(['intent','attached-unverified','uncertain']),at:z.string().datetime()}).strict();
-export const Decision = z.object({ control: Control, reason: z.string().max(400), draft: z.string().max(10000).optional(), evidenceIds: z.array(z.string()).optional() }).strict();
+export const Upload = z.object({id:z.string().uuid(),controlId:z.string(),documentToken:z.string().uuid(),hash:z.string(),name:z.string().max(200),status:z.enum(['intent','attached-unverified','uncertain']),at:z.string().datetime(),url:z.string().max(3000).optional(),fingerprint:z.string().max(30000).optional()}).strict();
+export const Decision = z.object({ control: Control, reason: z.string().max(400), draft: z.string().max(10000).optional(), evidenceIds: z.array(z.string()).optional(), resolution: z.enum(['pending', 'deferred', 'unknown']).optional() }).strict();
 export const Session = z.object({
   id: z.string().uuid(), tabId: z.number().int(), origin: z.string().url(), url: z.string().url(), title: z.string().max(300),
   state: z.enum(['ready', 'filling', 'awaiting-user', 'paused', 'review']), generation: z.number().int(),
   snapshot: Snapshot, decisions: z.array(Decision).max(200), journal: z.array(Journal).max(500),
   approved: z.record(z.string(), z.object({ value: z.string().max(10000), fingerprint: z.string(), documentToken: z.string() }).strict()),
   note: z.string().max(600), startedAt: z.string(), mode: z.enum(['assist', 'autofill'])
-  ,uploads:z.array(Upload).max(20).default([])
+  ,uploads:z.array(Upload).max(20).default([]), steps: z.array(z.object({ url:z.string().url().max(3000), at:z.string().datetime() }).strict()).max(50).default([])
 }).strict();
 export type Session = z.infer<typeof Session>;
 export const Resume = z.object({ id: z.string().uuid(), name: z.string().max(200), mime: z.string(), size: z.number().int(), hash: z.string(), text: z.string().max(60000), base64: z.string().max(4200000), importedAt: z.string() }).strict();
 export const Variant = z.object({ resume: Resume, parentHash:z.string(), jobHash:z.string(), profileRevision:z.number().int(), approvedText:z.string().max(60000), edits:z.array(ResumeEdit).max(200), previewReviewed:z.literal(true) }).strict();
-export const Receipt = z.object({ id: z.string().uuid(), at: z.string().datetime(), job: JobContext, url: z.string().url(), status: z.enum(['prepared', 'user-reported-submitted']), resumeName: z.string().max(200), resumeHash: z.string(), upload: z.literal('not-verified'), uploads:z.array(Upload).max(20).default([]), answers: z.array(z.object({ label: z.string().max(1500), value: z.string().max(10000), status: z.string().max(30) }).strict()).max(100) }).strict();
+export const Receipt = z.object({ id: z.string().uuid(), at: z.string().datetime(), job: JobContext, url: z.string().url(), status: z.enum(['prepared', 'user-reported-submitted']), resumeName: z.string().max(200), resumeHash: z.string(), upload: z.literal('not-verified'), uploads:z.array(Upload).max(20).default([]), answers: z.array(z.object({ label: z.string().max(1500), value: z.string().max(10000), status: z.string().max(30) }).strict()).max(100), steps: z.array(z.object({url:z.string().url().max(3000),at:z.string().datetime()}).strict()).max(50).default([]) }).strict();
 export const State = z.object({
   schema: z.literal(2), revision: z.number().int().nonnegative(), profile: Profile,
   session: Session.nullable(), resume: Resume.nullable(), jobText: z.string().max(16000),
@@ -64,7 +68,8 @@ export const State = z.object({
   job: JobContext.default(emptyJob), memory: z.array(AnswerMemory).max(200).default([]), imports: z.array(ImportedChange).max(100).default([]),
   assessment: Assessment.nullable().default(null), history: z.array(Receipt).max(50).default([]),
   retention: z.enum(['30', '90', 'keep']).default('30')
-  ,variants:z.array(Variant).max(5).default([]),selectedVariant:z.string().uuid().nullable().default(null)
+  ,variants:z.array(Variant).max(5).default([]),selectedVariant:z.string().uuid().nullable().default(null),
+  jobSources:z.array(JobSource).max(20).default([]), adaptersEnabled:z.boolean().default(true)
 }).strict();
 export type State = z.infer<typeof State>;
 export function initialState(): State {
@@ -79,14 +84,19 @@ export function migrateState(raw: unknown): State {
 export const UiCommand = z.discriminatedUnion('type', [
   z.object({ type: z.literal('GET') }).strict(),
   z.object({ type:z.literal('TOUCH') }).strict(),
-  z.object({ type: z.literal('INSPECT') }).strict(),
+  z.object({ type: z.literal('INSPECT'), continueApplication:z.boolean().optional(), sessionId:z.string().uuid().optional() }).strict(),
+  z.object({ type: z.literal('ADAPTERS'), enabled:z.boolean() }).strict(),
+  z.object({ type: z.literal('DECISION'), controlId:z.string(), resolution:z.enum(['pending','deferred','unknown']) }).strict(),
+  z.object({ type: z.literal('REVIEW_JOB_SOURCE'), source:JobSource }).strict(),
+  z.object({ type: z.literal('DELETE_JOB_SOURCE'), id:z.string().uuid() }).strict(),
   z.object({ type: z.literal('PROFILE'), values: z.record(ProfileKey, z.string().max(500)), evidence: z.array(Evidence).max(40), source: z.string().max(200) }).strict(),
   z.object({ type: z.literal('START'), mode: z.enum(['assist', 'autofill']) }).strict(),
   z.object({ type: z.literal('TICK') }).strict(),
   z.object({ type: z.literal('PAUSE') }).strict(),
-  z.object({ type: z.literal('ANSWER'), controlId: z.string(), value: z.string().max(10000), remember: z.boolean().optional() }).strict(),
+  z.object({ type: z.literal('ANSWER'), controlId: z.string(), value: z.string().max(10000), remember: z.boolean().optional(), retainSensitive:z.boolean().optional() }).strict(),
   z.object({ type: z.literal('CANDIDATE'), candidate: Candidate }).strict(),
   z.object({ type: z.literal('IMPORT_CONTACT'), key: ProfileKey, value: z.string().min(1).max(500), source: z.string().min(1).max(200) }).strict(),
+  z.object({ type:z.literal('IMPORT_CAREER'),proposal:CareerProposal,targetId:z.string().uuid().nullable(),separateRecord:z.boolean() }).strict(),
   z.object({ type: z.literal('IMPORT_UNDO'), id: z.string().uuid() }).strict(),
   z.object({ type: z.literal('SOURCE_DELETE'), source: z.string().max(200) }).strict(),
   z.object({ type: z.literal('MEMORY_DELETE'), id: z.string().uuid() }).strict(),
@@ -120,7 +130,7 @@ export const UiCommand = z.discriminatedUnion('type', [
 export type UiCommand = z.infer<typeof UiCommand>;
 export const Envelope = z.object({ schema: z.literal(1), requestId: z.string().uuid(), expectedRevision: z.number().int().nonnegative(), command: UiCommand }).strict();
 export const DriverCommand = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('INSPECT') }).strict(),
+  z.object({ type: z.literal('INSPECT'), adaptersEnabled:z.boolean().optional() }).strict(),
   z.object({ type: z.literal('BIND'), sessionId: z.string().uuid(), generation: z.number().int(), documentToken: z.string().uuid() }).strict(),
   z.object({ type: z.literal('WRITE'), actionId: z.string().uuid(), sessionId: z.string().uuid(), generation: z.number().int(), documentToken: z.string().uuid(), snapshotId: z.string().uuid(), controlId: z.string(), fingerprint: z.string(), before: z.string().max(12000), value: z.string().max(10000), expiresAt: z.number(), undo: z.boolean() }).strict(),
   z.object({ type: z.literal('PAUSE'), generation: z.number().int() }).strict()

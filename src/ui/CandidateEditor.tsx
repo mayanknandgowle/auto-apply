@@ -1,16 +1,20 @@
 import { useState } from 'react';
 import { Candidate, experienceMonths } from '../core/candidate';
 import type { PanelProps } from './types';
-type Section = 'employment' | 'education' | 'projects' | 'compensation' | 'authorization';
+type Section = 'employment' | 'education' | 'projects' | 'compensation' | 'authorization' | 'certifications' | 'languages' | 'preferences' | 'availability';
 type Field = { key: string; label: string; options?: string[]; multi?: boolean };
 const fields: Record<Section, Field[]> = {
   employment: [{key:'employer',label:'Employer'}, {key:'title',label:'Job title'}, {key:'kind',label:'Employment type',options:['professional','contract','internship']}, {key:'start',label:'Start date (YYYY or YYYY-MM)'}, {key:'end',label:'End date (blank if current)'}, {key:'location',label:'Work location'}, {key:'description',label:'Verified responsibilities and results',multi:true}],
   education: [{key:'institution',label:'Institution'}, {key:'degree',label:'Degree'}, {key:'specialization',label:'Specialization'}, {key:'start',label:'Education start (optional)'}, {key:'end',label:'Education end (optional)'}, {key:'status',label:'Education status',options:['completed','in-progress','not-completed']}, {key:'grade',label:'Original grade'}, {key:'gradeScale',label:'Original grade scale'}],
   projects: [{key:'title',label:'Project name'}, {key:'role',label:'Project role'}, {key:'tools',label:'Tools (comma separated)'}, {key:'description',label:'Verified project description',multi:true}, {key:'start',label:'Project start (optional)'}, {key:'end',label:'Project end (optional)'}],
   compensation: [{key:'kind',label:'Compensation type',options:['current','expected']}, {key:'status',label:'Compensation status',options:['unknown','known','declined','not-applicable']}, {key:'amount',label:'Amount (known only)'}, {key:'currency',label:'Currency (three-letter code)'}, {key:'period',label:'Pay period',options:['annual','monthly']}, {key:'basis',label:'Compensation basis',options:['fixed','total']}, {key:'grossNet',label:'Gross or net',options:['unknown','gross','net']}],
-  authorization: [{key:'country',label:'Authorization country'}, {key:'currentPermission',label:'Current work permission',options:['unknown','yes','no','declined']}, {key:'futureSponsorship',label:'Future sponsorship needed',options:['unknown','yes','no','declined']}, {key:'effectiveDate',label:'Confirmed as of (YYYY-MM-DD)'}]
+  authorization: [{key:'country',label:'Authorization country'}, {key:'currentPermission',label:'Current work permission',options:['unknown','yes','no','declined']}, {key:'futureSponsorship',label:'Future sponsorship needed',options:['unknown','yes','no','declined']}, {key:'effectiveDate',label:'Confirmed as of (YYYY-MM-DD)'}],
+  certifications:[{key:'title',label:'Certification title'},{key:'issuer',label:'Issuer'},{key:'issued',label:'Issued (YYYY or YYYY-MM)'},{key:'expires',label:'Expires (optional)'},{key:'url',label:'Credential URL (optional)'}],
+  languages:[{key:'language',label:'Language'},{key:'proficiency',label:'Language proficiency',options:['unknown','basic','conversational','professional','native-or-bilingual']}],
+  preferences:[{key:'kind',label:'Preference type',options:['location','work-arrangement','employment-type','role']},{key:'status',label:'Preference status',options:['unknown','known','declined','not-applicable']},{key:'value',label:'Preference (known only)'}],
+  availability:[{key:'status',label:'Availability status',options:['unknown','known','declined','not-applicable']},{key:'earliestDate',label:'Earliest joining date (YYYY-MM-DD)'},{key:'conditions',label:'Confirmed availability conditions',multi:true}]
 };
-const labels: Record<Section,string> = { employment:'Employment', education:'Education', projects:'Projects', compensation:'Compensation', authorization:'Work authorization' };
+const labels: Record<Section,string> = { employment:'Employment', education:'Education', projects:'Projects', compensation:'Compensation', authorization:'Work authorization', certifications:'Certifications',languages:'Languages',preferences:'Preferences',availability:'Availability' };
 function blanks(section: Section) { return Object.fromEntries(fields[section].map(f => [f.key, f.options?.[0] ?? ''])); }
 export function CandidateEditor({ state, busy, raw, perform }: PanelProps) {
   const [section, setSection] = useState<Section>('employment'), [draft, setDraft] = useState<Record<string,string>>(() => blanks('employment'));
@@ -26,6 +30,8 @@ export function CandidateEditor({ state, busy, raw, perform }: PanelProps) {
     const entry: Record<string, unknown> = { ...draft, id: editing ?? crypto.randomUUID(), source: 'Manual confirmation', confirmedAt: new Date().toISOString(), revision: (old?.revision ?? 0) + 1 };
     if (section === 'employment') { entry.current = !draft.end; entry.end = draft.end || null; }
     if (section === 'education' || section === 'projects') { entry.start = draft.start || null; entry.end = draft.end || null; }
+    if (section === 'certifications') { entry.issued=draft.issued||null;entry.expires=draft.expires||null; }
+    if (section === 'availability') entry.earliestDate=draft.earliestDate||null;
     if (section === 'projects') entry.tools = (draft.tools ?? '').split(',').map(s => s.trim()).filter(Boolean);
     if (section === 'compensation') { entry.amount = draft.amount?.trim() ? Number(draft.amount) : null; entry.currency = draft.currency?.toUpperCase(); }
     const parsed = Candidate.safeParse({ ...candidate, [section]: [...candidate[section].filter(e => e.id !== editing), entry] });

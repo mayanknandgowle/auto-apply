@@ -1,6 +1,6 @@
 # Internal alpha release checklist
 
-Version 0.2.0 remains a local internal build. Store publication and real employer applications require separate owner action.
+Version 0.2.1 remains a local internal build. Store publication and real employer applications require separate owner action.
 
 - [x] Source, pinned dependencies, lockfile and CI workflow.
 - [x] Strict models, serialized writes, bounded document/provider operations and explicit action authority.
@@ -8,7 +8,7 @@ Version 0.2.0 remains a local internal build. Store publication and real employe
 - [x] Source/original preservation, reviewed derivatives and honest capability labels.
 - [x] Synthetic browser harness and unit/security/domain tests.
 - [x] Updated installation, privacy, security, requirement and support documentation.
-- [x] Final 0.2.0 build/test/archive checks recorded in VERIFICATION.md: 66 unit tests and 44 browser scenarios passed.
+- [ ] Final 0.2.1 build/test/archive and remote CI results recorded in VERIFICATION.md.
 - [ ] Installed Chrome/Edge toolbar, side-panel, host-consent and minimum-version checks.
 - [ ] Live provider connection/structured-output/quality evaluation with synthetic data and local credentials.
 - [ ] Named ATS normal-flow/upload acceptance and terminal-boundary validation.

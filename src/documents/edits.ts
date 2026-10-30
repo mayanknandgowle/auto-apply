@@ -12,7 +12,11 @@ export function approvedText(original:string, edits:ResumeEdit[], evidence:{id:s
     if(!edit.after.trim())throw new Error('Empty blocks are unsupported. Keep the original or review in an external editor.');
     const sources=edit.evidenceIds.map(id=>{const source=evidence.find(e=>e.id===id);if(!source)throw new Error('A supporting fact changed. Review again.');return source.text;});
     const supported=[edit.before,...sources].join('\n');
-    for(const number of edit.after.match(/\d+(?:[.,]\d+)*(?:%|\+)?/g)??[]) if(!supported.includes(number))throw new Error('A number or date has no cited source. Keep the original value or cite confirmed evidence.');
+    const supportedNumbers=new Set(supported.match(/\d+(?:[.,]\d+)*(?:%|\+)?/g)??[]);
+    for(const number of edit.after.match(/\d+(?:[.,]\d+)*(?:%|\+)?/g)??[]) if(!supportedNumbers.has(number))throw new Error('A number or date has no cited source. Keep the original value or cite confirmed evidence.');
+    const words=(text:string)=>text.toLowerCase().match(/[\p{L}\p{N}+#]+/gu)??[];
+    const originalWords=new Set(words(edit.before));
+    if(words(edit.after).some(word=>!originalWords.has(word))&&!sources.length)throw new Error('New wording needs confirmed supporting evidence. Cite a fact and review the claim, or keep the original wording.');
     return edit.after.trim();
   });
   const text=parts.join('\n\n');

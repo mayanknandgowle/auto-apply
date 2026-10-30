@@ -12,9 +12,12 @@ let extensionId: string;
 const base = 'http://127.0.0.1:4177';
 const browserProfile = path.resolve(`test-results/browser-profile-${process.pid}`);
 const extensionPath=path.resolve('.output/chrome-test');
+async function currentState() {
+  return panel.evaluate(async()=> (await chrome.runtime.sendMessage({schema:1,requestId:crypto.randomUUID(),expectedRevision:0,command:{type:'GET'}})).state);
+}
 async function launch() {
   context=await chromium.launchPersistentContext(browserProfile,{
-    channel:'chromium', headless:true,
+    channel:process.env.APPLYPILOT_TEST_BROWSER || 'chromium', headless:true,
     args:[`--disable-extensions-except=${extensionPath}`,`--load-extension=${extensionPath}`]
   });
   worker=context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
@@ -22,10 +25,19 @@ async function launch() {
   // Match the documented unpacked-install flow. Chromium disables an unpacked
   // extension on runtime.reload when Developer mode has never been enabled.
   const extensions=await context.newPage();
-  await extensions.goto('chrome://extensions');
-  const developerMode=extensions.getByRole('switch',{name:'Developer mode'});
-  if(await developerMode.getAttribute('aria-checked')!=='true') await developerMode.click();
-  await expect(developerMode).toHaveAttribute('aria-checked','true');
+  const edge=process.env.APPLYPILOT_TEST_BROWSER==='msedge';
+  await extensions.goto(edge?'edge://extensions':'chrome://extensions');
+  if(edge) {
+    // Edge 156 exposes this Fluent control through ElementInternals rather than
+    // Chromium's aria-checked attribute. Inspect the rendered switch state.
+    const developerMode=extensions.locator('fluent-switch#dev-switch:visible');
+    if(!await developerMode.evaluate(el=>(el as HTMLElement & {checked:boolean}).checked)) await developerMode.click();
+    await expect(developerMode).toHaveJSProperty('checked',true);
+  } else {
+    const developerMode=extensions.getByRole('switch',{name:'Developer mode'});
+    if(await developerMode.getAttribute('aria-checked')!=='true') await developerMode.click();
+    await expect(developerMode).toHaveAttribute('aria-checked','true');
+  }
   await extensions.close();
 }
 
@@ -34,7 +46,7 @@ test.beforeAll(async () => {
   await mkdir(extensionPath,{ recursive:true });
   await cp(path.resolve('.output/chrome-mv3'), extensionPath, { recursive:true });
   const manifest=JSON.parse(await readFile(path.join(extensionPath,'manifest.json'),'utf8'));
-  manifest.host_permissions=[`${base}/*`];
+  manifest.host_permissions=[`${base}/*`, 'https://jobs.lever.co/*']; // Lever traffic is intercepted by the one sanitized fixture test.
   await writeFile(path.join(extensionPath,'manifest.json'),JSON.stringify(manifest));
   await launch();
   console.log('Browser under test:',await worker.evaluate(()=>navigator.userAgent));
@@ -394,6 +406,7 @@ test('manual multipage flow fills scoped answers and never activates a disguised
   await panel.locator('article').filter({ has: panel.getByRole('heading',{ name:'Why does your experience fit this role? *' }) }).getByRole('button',{ name:'Approve for this page' }).click();
   await expect(panel.getByRole('button',{ name:'Help me apply' })).toBeEnabled();
   await panel.getByLabel('Answer for Will you require sponsorship?').selectOption('no');
+  await panel.getByLabel('Keep this sensitive answer in my encrypted application journal.',{exact:false}).check();
   await panel.locator('article').filter({ has: panel.getByRole('heading',{ name:'Will you require sponsorship? *' }) }).getByRole('button',{ name:'Approve for this page' }).click();
   await fill();
   await expect(job.locator('#narrative')).toHaveValue('I built a TypeScript inventory project.');
@@ -468,6 +481,7 @@ test('corrupt or image-only documents fail explicitly without a false imported s
 test('stale options invalidate approved answers before a write',async()=>{
   await job.goto(`${base}/?step=2`); await inspect();
   await panel.getByLabel('Answer for Will you require sponsorship?').selectOption('no');
+  await panel.getByLabel('Keep this sensitive answer in my encrypted application journal.',{exact:false}).check();
   await panel.locator('article').filter({ has:panel.getByRole('heading',{ name:'Will you require sponsorship? *' }) }).getByRole('button',{ name:'Approve for this page' }).click();
   await job.locator('#sponsorship option[value="no"]').evaluate(el=>{ el.textContent='No, I cannot work here'; });
   await fill();
@@ -501,12 +515,17 @@ test('page content scripts cannot read trusted session keys or authorize UI comm
 test('service-worker termination retains the profile and requires reconciliation',async()=>{
   await profile(); await inspect();
   const devtools=await context.newCDPSession(panel);await devtools.send('ServiceWorker.enable');
+  await panel.getByLabel('Application mode',{exact:true}).selectOption('assist');
   await panel.getByRole('button',{name:'Help me apply'}).click();
   await expect(job.locator('#first')).toHaveValue('Alex');
+  // Stop at a durable verified checkpoint. Stopping after the DOM write alone can
+  // interrupt the next intent, which correctly must NOT be retried automatically.
+  await expect(panel.getByText('One field filled and verified. Inspect to continue.',{exact:true})).toBeVisible();
   await devtools.send('ServiceWorker.stopAllWorkers');
   await expect(panel.getByRole('button',{ name:'Help me apply' })).toBeEnabled({ timeout:15000 });
   await panel.getByRole('button',{ name:'Profile',exact:true }).click();await expect(panel.getByLabel('First name',{exact:true})).toHaveValue('Alex');
-  await panel.getByRole('button',{ name:'Apply',exact:true }).click();await inspect();await fill();
+  await panel.getByRole('button',{ name:'Apply',exact:true }).click();await inspect();
+  await panel.getByLabel('Application mode',{exact:true}).selectOption('autofill');await fill();
   await expect(job.locator('#first')).toHaveValue('Alex');
   await expect(job.locator('#last')).toHaveValue('Rivera');
   await devtools.detach();
@@ -546,4 +565,127 @@ test('extension reload loses session-only data while worker termination alone do
   await expect(panel.getByRole('heading',{name:'Start with an open job page'})).toBeVisible();
   await panel.getByRole('button',{name:'Profile',exact:true}).click();
   await expect(panel.getByLabel('First name',{exact:true})).toHaveValue('');
+});
+
+test('application journal survives explicitly linked steps and upload reload without duplicate attachment',async()=>{
+  await profile();await inspect();await fill();
+  const applicationId=(await currentState()).session.id;
+  await job.goto(`${base}/?step=2`);await job.bringToFront();
+  const wrongApplication=await panel.evaluate(async()=>chrome.runtime.sendMessage({schema:1,requestId:crypto.randomUUID(),expectedRevision:0,command:{type:'INSPECT',continueApplication:true,sessionId:crypto.randomUUID()}}));
+  expect(wrongApplication.ok).toBe(false);expect(wrongApplication.error).toContain('application changed');
+  await panel.getByRole('button',{name:'Inspect next step of this application',exact:true}).click();
+  await expect.poll(async()=>(await currentState()).session.steps.length).toBe(2);
+  expect((await currentState()).session.id).toBe(applicationId);
+  expect((await currentState()).session.journal.some((j:{label:string})=>j.label==='First name')).toBe(true);
+  await panel.getByRole('button',{name:'Resume',exact:true}).click();
+  await panel.getByLabel('Choose PDF or DOCX').setInputFiles({name:'synthetic.pdf',mimeType:'application/pdf',buffer:await syntheticPdf()});
+  await expect(panel.getByText('Original stored locally.',{exact:false})).toBeVisible();
+  await panel.getByRole('button',{name:'Apply',exact:true}).click();await inspect();
+  await panel.getByRole('button',{name:'Attach selected resume to this input'}).click();
+  await expect(panel.getByText('Selected file attached to the native input.',{exact:false})).toBeVisible();
+  await job.reload();await inspect();
+  await expect(panel.getByRole('button',{name:'Attach selected resume to this input'})).toBeDisabled();
+  expect((await currentState()).session.uploads).toHaveLength(1);
+  await panel.getByRole('button',{name:'Save preparation receipt',exact:true}).click();
+  await expect.poll(async()=>(await currentState()).history.length).toBe(1);
+  const receipt=(await currentState()).history[0];expect(receipt.steps).toHaveLength(2);expect(receipt.answers.some((a:{label:string})=>a.label==='First name')).toBe(true);
+  const refreshed=await panel.evaluate(async(sessionId)=>chrome.runtime.sendMessage({schema:1,requestId:crypto.randomUUID(),expectedRevision:0,command:{type:'INSPECT',continueApplication:true,sessionId}}),applicationId);
+  expect(refreshed.ok).toBe(true);expect(refreshed.state.session.id).toBe(applicationId);
+  const staleWrite=await panel.evaluate(async()=>chrome.runtime.sendMessage({schema:1,requestId:crypto.randomUUID(),expectedRevision:0,command:{type:'START',mode:'autofill'}}));
+  expect(staleWrite.ok).toBe(false);expect(staleWrite.error).toContain('session changed');
+  expect(await job.evaluate(()=>(window as unknown as {submissions:number}).submissions)).toBe(0);
+});
+
+test('uncertain write stays blocked across worker restart and document reload',async()=>{
+  await job.goto(`${base}/?scenario=reject`);await profile();await inspect();await fill();
+  expect((await currentState()).session.journal[0].status).toBe('uncertain');
+  const devtools=await context.newCDPSession(panel);await devtools.send('ServiceWorker.enable');await devtools.send('ServiceWorker.stopAllWorkers');
+  await expect(panel.getByRole('button',{name:'Help me apply'})).toBeEnabled({timeout:15000});
+  await job.reload();await inspect();await fill();
+  await expect(job.locator('#first')).toHaveValue('');
+  const state=await currentState();expect(state.session.journal.filter((j:{label:string})=>j.label==='First name')).toHaveLength(1);
+  expect(state.session.journal[0].status).toBe('uncertain');
+  await expect(job.locator('#last')).toHaveValue('Rivera');
+  await devtools.detach();worker=context.serviceWorkers().find(w=>w.url().includes(extensionId))??await context.waitForEvent('serviceworker');
+});
+
+test('deferred and unknown decisions persist on reinspection without blocking independent answers',async()=>{
+  await job.goto(`${base}/?step=2`);await inspect();
+  const narrative=panel.locator('article').filter({has:panel.getByRole('heading',{name:'Why does your experience fit this role? *'})});
+  await narrative.getByRole('button',{name:'Defer',exact:true}).click();
+  const sponsor=panel.locator('article').filter({has:panel.getByRole('heading',{name:'Will you require sponsorship? *'})});
+  await sponsor.getByRole('button',{name:'I don’t know',exact:true}).click();await inspect();
+  await expect(narrative.getByText('Decision: deferred')).toBeVisible();await expect(sponsor.getByText('Decision: unknown')).toBeVisible();
+  await narrative.getByLabel('Answer for Why does your experience fit this role?').fill('I have confirmed project evidence.');
+  await narrative.getByRole('button',{name:'Approve for this page',exact:true}).click();await fill();
+  await expect(job.locator('#narrative')).toHaveValue('I have confirmed project evidence.');await expect(job.locator('#sponsorship')).toHaveValue('');
+});
+
+test('reviewed radio and checkbox choices work in open shadow roots while legal terms remain manual',async()=>{
+  await job.evaluate(()=>{
+    const host=document.createElement('section');document.querySelector('main')!.append(host);
+    host.attachShadow({mode:'open'}).innerHTML='<fieldset><legend>Preferred interview mode</legend><label><input type="radio" name="mode" value="remote">Remote</label><label><input type="radio" name="mode" value="office">Office</label></fieldset><fieldset><legend>Select tools</legend><label><input type="checkbox" name="tools" value="ts">TypeScript</label><label><input type="checkbox" name="tools" value="js">JavaScript</label></fieldset><fieldset><legend>I agree to legal terms</legend><label><input type="checkbox" name="terms" value="yes">Yes</label></fieldset>';
+  });await inspect();
+  for(const label of ['Preferred interview mode — Office','Select tools — TypeScript']) {
+    const decision=panel.locator('article').filter({has:panel.getByRole('heading',{name:label,exact:true})});
+    await decision.getByLabel(`Answer for ${label}`,{exact:true}).selectOption('true');await decision.getByRole('button',{name:'Approve for this page'}).click();
+  }
+  await fill();await expect(job.locator('input[value=office]')).toBeChecked();await expect(job.locator('input[value=ts]')).toBeChecked();
+  await expect(job.locator('input[value=js]')).not.toBeChecked();await expect(job.locator('input[name=terms]')).not.toBeChecked();
+  expect((await new AxeBuilder({page:panel}).analyze()).violations).toEqual([]);
+});
+
+test('observed Lever structure is fixture-tested with adapter disable and terminal boundary',async()=>{
+  const html=await readFile('tests/fixtures/lever.html','utf8');
+  // No request reaches Lever; the production host is used only for adapter detection.
+  await job.route('https://jobs.lever.co/**',route=>route.fulfill({contentType:'text/html',body:html}));
+  await job.goto('https://jobs.lever.co/synthetic/11111111-2222-4333-8444-555555555555/apply');
+  await profile();await inspect();
+  expect((await currentState()).session.snapshot.adapter.id).toBe('lever-hosted-v1');
+  const choice=panel.locator('article').filter({has:panel.getByRole('heading',{name:'Please check all that apply: — Friend',exact:true})});
+  await choice.getByLabel('Answer for Please check all that apply: — Friend').selectOption('true');await choice.getByRole('button',{name:'Approve for this page'}).click();await fill();
+  await expect(job.getByLabel('Full name',{exact:false})).toHaveValue('Alex Rivera');await expect(job.getByLabel('Friend',{exact:true})).toBeChecked();
+  expect(await job.evaluate(()=>(window as unknown as {submissions:number}).submissions)).toBe(0);
+  await panel.getByRole('button',{name:'Settings',exact:true}).click();await panel.getByRole('button',{name:'Disable Lever adapter',exact:true}).click();await expect(panel.getByRole('button',{name:'Enable Lever adapter',exact:true})).toBeVisible();
+  await panel.getByRole('button',{name:'Apply',exact:true}).click();await inspect();
+  expect((await currentState()).session.snapshot.adapter).toBeUndefined();
+});
+
+test('source conflicts, career review and new profile fields have accessible review states',async()=>{
+  await panel.getByRole('button',{name:'Resume',exact:true}).click();
+  await panel.getByLabel('Job description',{exact:true}).fill('Company: Alpha\nRole: Engineer\nRequired qualifications:\n- TypeScript');await panel.getByRole('button',{name:'Save job description'}).click();
+  await expect(panel.getByRole('button',{name:'Save job description'})).toBeEnabled();
+  await panel.getByLabel('Job description',{exact:true}).fill('Company: Beta\nRole: Designer');await panel.getByRole('button',{name:'Save job description'}).click();
+  await panel.getByRole('button',{name:'Apply',exact:true}).click();await expect(panel.getByText('Different source statements need review:',{exact:false})).toBeVisible();
+  await panel.getByRole('button',{name:'Profile',exact:true}).click();
+  await panel.getByLabel('Career import text').fill('Employer: Synthetic Co\nTitle: Engineer\nType: internship\nStart: 2024-06\nEnd: 2024-08');await panel.getByRole('button',{name:'Review career text',exact:true}).click();
+  expect((await new AxeBuilder({page:panel}).analyze()).violations).toEqual([]);
+  await panel.getByRole('heading',{name:'Proposed record',exact:true}).scrollIntoViewIfNeeded();
+  await panel.screenshot({path:'test-results/career-import-review.png'});
+  await panel.getByLabel('Merge choice').selectOption('new');await panel.getByRole('button',{name:'Confirm reviewed career import'}).click();
+  await expect.poll(async()=>(await currentState()).profile.candidate.employment.length).toBe(1);
+  await panel.getByLabel('Career section').selectOption('availability');await panel.getByLabel('Availability status').selectOption('known');await panel.getByLabel('Earliest joining date (YYYY-MM-DD)').fill('2027-02-01');await panel.getByLabel('Confirmed availability conditions').fill('Subject to written release.');await panel.getByRole('button',{name:'Confirm career record'}).click();
+  await expect.poll(async()=>(await currentState()).profile.candidate.availability.length).toBe(1);
+  expect((await new AxeBuilder({page:panel}).analyze()).violations).toEqual([]);
+});
+
+
+test('sensitive disclosures exclude existing values and require explicit journal retention',async()=>{
+  await job.setContent('<main><h1>Synthetic application</h1><label>Current salary<input value="50000"></label><label>Future sponsorship needs<textarea id="sponsor"></textarea></label></main>');
+  await inspect();
+  let state=await currentState();
+  expect(JSON.stringify(state.session.snapshot)).not.toContain('50000');
+  const control=state.session.snapshot.controls.find((c:any)=>c.label==='Future sponsorship needs');
+  const reply=await panel.evaluate(async({controlId,revision})=>chrome.runtime.sendMessage({schema:1,requestId:crypto.randomUUID(),expectedRevision:revision,command:{type:'AI_BEGIN',controlId}}),{controlId:control.id,revision:state.revision});
+  expect(reply.ok).toBe(false);expect(reply.error).toContain('own answer');
+  await panel.getByLabel('Answer for Future sponsorship needs').fill('I need sponsorship for this role.');
+  await panel.getByRole('button',{name:'Approve for this page',exact:true}).click();
+  await expect(panel.getByRole('alert')).toContainText('retain this sensitive answer');
+  expect((await currentState()).session.journal).toEqual([]);
+  await panel.getByLabel('Keep this sensitive answer in my encrypted application journal.',{exact:false}).check();
+  await panel.getByRole('button',{name:'Approve for this page',exact:true}).click();
+  await fill();await expect(job.locator('#sponsor')).toHaveValue('I need sponsorship for this role.');
+  state=await currentState();expect(state.session.journal[0].after).toBe('I need sponsorship for this role.');
+  const receipt=await panel.evaluate(async(revision)=>chrome.runtime.sendMessage({schema:1,requestId:crypto.randomUUID(),expectedRevision:revision,command:{type:'SAVE_RECEIPT',userReported:false}}),state.revision);
+  expect(receipt.ok).toBe(true);expect(receipt.state.history[0].answers).toEqual([]);
 });

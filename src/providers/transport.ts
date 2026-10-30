@@ -55,5 +55,10 @@ export async function runProviderDraft(task: AiTask, signal: AbortSignal) {
   if (typeof providerKey !== 'string' || providerBinding !== JSON.stringify(config)) throw new Error('Provider configuration changed. Draft again after reviewing the current destination.');
   const origin = new URL(providerUrl(config)).origin;
   if (!await chrome.permissions.contains({origins:[`${origin}/*`]})) throw new Error('Provider permission was revoked. Configure access in Settings.');
+  // Permissions are asynchronous; destination/key changes while that prompt is
+  // pending must invalidate the previously read task before any transmission.
+  const current = await chrome.storage.session.get(['providerKey','providerBinding']);
+  if(signal.aborted) throw new Error('AI request cancelled before dispatch.');
+  if(current.providerKey!==providerKey || current.providerBinding!==providerBinding) throw new Error('Provider configuration changed. Review the destination and draft again.');
   return providerRequest(config,providerKey,JSON.stringify({task:'Draft an answer for human review using only this evidence.',question:task.question,confirmedEvidence:task.evidence,jobDescription:task.jobText}),signal);
 }

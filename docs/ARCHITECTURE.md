@@ -1,6 +1,6 @@
 # Architecture and data flow
 
-This document describes the **implemented v0.2.0 internal alpha**. For proposed work, see the [implementation status](IMPLEMENTATION_STATUS.md).
+This document describes the **implemented v0.2.1 internal alpha**. For proposed work, see the [implementation status](IMPLEMENTATION_STATUS.md).
 
 ## Components and trust boundaries
 
@@ -56,7 +56,7 @@ sequenceDiagram
     User->>P: Review, navigate and submit manually
 ```
 
-A changed field, stale snapshot, navigation, user interruption or uncertain result stops or invalidates further work. Existing user values are preserved; uncertain actions are not automatically retried. Resume attachment requires a separate explicit action and confirms only the local input state, not server acceptance.
+A changed field, stale snapshot, navigation, user interruption or uncertain result stops or invalidates further work. Existing user values are preserved; uncertain actions are not automatically retried. Resume attachment requires a separate explicit action and confirms only the local input state, not server acceptance. Explicit same-tab/same-origin continuation carries the journal, step URLs and upload attempts into the next page. Uncertain semantic fingerprints block a repeated dispatch even after document replacement. Job-source review remains separate from executable application authority.
 
 ## Code map
 
@@ -73,4 +73,4 @@ A changed field, stale snapshot, navigation, user interruption or uncertain resu
 
 ## Boundaries and next steps
 
-The current build does not automatically navigate or submit. Named ATS support, server-side upload acceptance, broader controls and guarded submission remain future work; see the [support matrix](SUPPORT_MATRIX.md) and [milestones](IMPLEMENTATION_STATUS.md). Synthetic browser tests open the panel in an extension tab and do not certify physical side-panel behavior. See the [verification report](VERIFICATION.md) for observed results and remaining release gates.
+The current build does not automatically navigate or submit. The bundled Lever interpreter only recognizes the observed hosted-form subset and can be disabled. Live ATS mutation validation, server-side upload acceptance, broader controls and guarded submission remain future work; see the [support matrix](SUPPORT_MATRIX.md) and [milestones](IMPLEMENTATION_STATUS.md). Synthetic browser tests open the panel in an extension tab and do not certify physical side-panel behavior. See the [verification report](VERIFICATION.md) for observed results and remaining release gates.

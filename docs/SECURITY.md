@@ -1,6 +1,6 @@
 # Security model and permissions
 
-0.2.0 internal alpha. Trusted extension contexts are not independent security sandboxes: a compromised dependency, extension or unlocked device can expose usable data.
+0.2.1 internal alpha. Trusted extension contexts are not independent security sandboxes: a compromised dependency, extension or unlocked device can expose usable data.
 
 ## Authority boundaries
 
@@ -39,6 +39,16 @@ Gemini and OpenAI have fixed URLs. A custom chat-completions endpoint must be HT
 Model results are untrusted structured data. Exact evidence IDs/quotes are validated and drafts require review. Citation validation cannot prove that every generated claim follows from the citation. Live semantic-grounding evaluation is still required.
 
 Resume intake checks signatures, size/pages, ZIP expansion, encryption and embedded binaries. DOCX extraction runs in a bounded worker; extracted text is rendered as text. These workers are not hard process/memory sandboxes. Generated documents use controlled templates, retain original lineage, reparse against approved text, reject placeholders and unsupported added numbers, and require visual review. PDF glyph/long-word rejection avoids silent clipping; DOCX visual layout and PDF accessibility tagging remain limitations.
+
+## Continuation boundaries
+
+Native choice writes require exact group options and an explicit selected option. Legal terms and attestations remain manual. Open shadow roots use visible-host checks; traversal is bounded, and frames/closed roots/custom widgets remain unsupported. The bundled Lever interpreter only augments labels and detection; it adds no click command or permissions.
+
+Explicit same-tab/origin continuation retains the journal across steps. Uncertain fingerprints and file hashes prevent duplicate dispatch after document replacement or worker interruption. Reconnect gating prevents a panel from starting before its trusted port is ready. A different job heading or captured description invalidates an execution step. Read-only inspection may refresh a stale panel revision; continued steps must still match the requested application ID, and all write commands retain exact revision checks. Already answered recognized sensitive fields are excluded from saved inspections. Sensitive questions are excluded from AI drafting and require explicit consent before a user-provided answer enters the journal; receipts exclude those answers. This keyword classification is conservative, not a guarantee that arbitrary free text contains no sensitive information.
+
+Imported career blocks are untrusted proposals. Multi-identifier matches are shown for user review; source deletion clears excerpts and rollback payloads without deleting independently confirmed records. Job-source excerpts cannot be replaced by fabricated quotes. New sources do not silently authorize filling.
+
+Provider key/configuration is checked again after asynchronous permission verification. This closes a configuration-change window before dispatch; a request already sent cannot be recalled.
 
 ## Remaining assurance work
 

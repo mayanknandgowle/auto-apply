@@ -1,77 +1,55 @@
-# Verification report — 29 October 2026
+# Verification report — 30 October 2026
 
-Scope: **0.2.0 internal alpha**, local synthetic data. The previous report is preserved in `archive/VERIFICATION-0.1.0.md`. These results do not establish production readiness or live ATS/provider support.
+Scope: **0.2.1 internal alpha**, synthetic applicant data. This is a narrow Milestone 3 coverage/recovery slice; Milestones 0–3 are not fully complete. The previous report is preserved in [archive/VERIFICATION-0.2.0.md](archive/VERIFICATION-0.2.0.md). Requirement dispositions are in [CONTINUATION_CHECKLIST.md](CONTINUATION_CHECKLIST.md).
 
-## Environment and results
+## Environment and final checks
 
-Windows x64; Node 24.15.0; pnpm 11.25.0; WXT 0.21.5; TypeScript 7.0.2; Playwright 1.64.1. Actual browser user agent reports `HeadlessChrome/156.0.0.0`, using an isolated persistent test profile. No real applicant data or developer API key was used.
+Windows x64; Node 24.15.0; pnpm 11.25.0; WXT 0.21.5; TypeScript 7.0.2; Playwright 1.64.1. Bundled Chromium reports HeadlessChrome/156.0.0.0. Installed Edge executable is 156.0.4314.50. Isolated profiles and synthetic files were used; no real applicant values or provider keys were supplied.
 
 | Check | Observed result |
 | --- | --- |
-| `pnpm typecheck` | Passed |
-| `pnpm test` | 66 tests passed across 5 files |
-| `pnpm build` | Chrome MV3 release build passed |
-| `pnpm check:bundle` | Manifest, permissions, CSP, remote script tags and embedded-key checks passed |
-| `pnpm build:edge` | Edge build passed; no installed Edge runtime certification |
-| `pnpm zip` | 15 release files; manifest version 0.2.0; no test fixtures, development server, browser profiles or candidate data |
-| `pnpm audit --prod` | No known vulnerabilities found on this date; not a complete security audit |
-| Chromium integration suite | All 44 scenarios passed in 2.6 minutes; zero retries, skips or expected failures |
-| Automated accessibility | Apply-view tagged WCAG checks and default axe checks of Profile, Resume and Settings pass in their tested states |
-| PDF rendering | Generated single-page and three-page fixtures visually inspected; readable text, consistent margins and no observed clipping/overlap |
-| DOCX generation | Reparsed text matches approved text; office-engine visual rendering remains unverified |
-| Live providers / real ATS applications | Not run; no paid requests or applications submitted |
+| Type checking | Passed |
+| Unit tests | 86 passed across 6 files |
+| Chrome MV3 / Edge MV3 builds | Passed |
+| Bundle checks | Manifest, permission, CSP, remote-script and embedded-key checks passed |
+| ZIP package | 15 files, 1,337,734 bytes; version 0.2.1; every archive file matches the release directory and all 14 non-manifest release files match the test copy |
+| Production dependency audit | No known vulnerabilities reported on 30 October 2026; not a complete security review |
+| Full local Chromium integration suite | 49/51 passed in 11.5 minutes before the inspection revision-race fix; the two failures are explained below |
+| Post-fix local browser regressions | Both failed recovery scenarios pass (2/2, 1.4 minutes), including wrong-application and stale-write rejection; zero retries |
+| Installed Edge smoke tests | 2/2 passed in 58.5 seconds, zero retries: normal native/dependent filling with no navigation, and sensitive-answer retention/receipt exclusion |
+| Accessibility | Automated axe checks cover tested Apply/Profile/Resume/Settings and review states; manual audit remains open |
+| DOCX office layout | Unverified: packaged renderer cannot locate LibreOffice. Word 16.0.19328.20190 is installed but native control could not activate its minimized window. Text reparse is tested separately. |
+| Live providers | Not run: no locally supplied credentials and provider-specific paid-use authorization established |
+| Live ATS | One public Lever application structure observed read-only in installed Edge; no filling, attachment or submission |
 
-## Browser harness boundary
+ZIP SHA-256: `895575d6f40db1fc634984f217db44f51a2306c8990cd8efca800a34aeeb930e`. Local ZIPs, browser profiles, traces and generated applicant artifacts are ignored and excluded from source commits.
 
-The production JavaScript is copied into a separate test extension. Its test-only manifest adds `http://127.0.0.1:4177/*` to substitute for the toolbar gesture's temporary page grant. The release manifest has no unconditional hosts; its optional HTTPS declaration allows exact-origin provider grants. The fixture server binds only to loopback.
+## Baseline and failure investigation
 
-After the final run, SHA-256 comparisons confirmed that all 14 non-manifest release files match the browser-tested extension.
+The starting checkout was clean at `c09d276`. Its typecheck, 66 units, builds, bundle and ZIP checks passed locally. Its browser baseline passed 43 of 44 scenarios: the wrong-tab test received a stale-revision error before the more actionable tab-binding error. The coordinator now checks the bound tab first.
 
-The panel HTML is tested in an extension tab. This does **not** prove actual side-panel placement, installed-browser toolbar grants, optional-permission prompts or Chromium 142 compatibility. Local document imports observe no HTTP(S) requests. Attachment tests exercise local native file inputs and synthetic behavior, not an employer's server acceptance.
+Read the [latest pre-change successful CI run](https://github.com/mayanknandgowle/auto-apply/actions/runs/40846753448) and [preceding failed run](https://github.com/mayanknandgowle/auto-apply/actions/runs/40846332796). The failed job log showed the worker-termination test expecting a last-name write after interruption. Its first DOM observation did not establish a durable completed checkpoint; interruption could leave the next intent uncertain. The test now stops after assist mode explicitly confirms a durable one-field checkpoint. A separate failure-injected test verifies that an uncertain write stays blocked across worker restart and document reload. No retries, explicit skips or weakened terminal assertions were introduced.
 
-## Covered workflows
+An intermediate 50-scenario run passed 49 and timed out waiting for an encrypted-backup download. Trace inspection showed the export click was delivered, with no captured application exception; the exact cause was not established. About 0.5 GB free memory was observed during that run, which is context rather than a proven cause. The isolated unchanged backup test then passed in 11.3 seconds. Final-suite results are recorded above rather than discarding this failure history.
 
-- Saved vault creation, lock/unlock, wrong-passphrase rejection, browser restart, idle expiry, corrupt-data recovery without reset, and preview-bound encrypted backup restoration.
-- Structured employment/education records, reviewed contact import, conditional rollback that preserves later edits, scoped answer reuse and expiry rules.
-- Reviewed PDF/DOCX derivatives, immutable original bytes, exact normalized text reparse, unsupported-number rejection, unsupported PDF glyph/long-word rejection, actual PDF preview rendering and multipage pagination.
-- Evidence assessment with exact selected-resume quotes, coverage suppression, job-change invalidation and separate eligibility handling.
-- Provider consent/configuration, destination changes clearing entered keys, and clearing unsaved private text when ending a session.
-- Explicit native attachment with exact byte/hash checks, incompatible-format rejection, existing-file preservation, uncertainty and no automatic retry.
-- Preparation versus user-reported submission receipts; no navigation or submission command.
-- Inspection without mutation; native contact/dependent inputs and selects; real React controlled-state rerender; preservation and safe undo; duplicate/contextual labels; stale options; hidden, password and OTP exclusions.
-- Mid-write validation failures, ignored events, replaced controls and user corrections pause safely. Page instructions cannot authorize actions. Content scripts cannot access trusted keys or panel commands.
-- Manual multipage flow, disguised terminal controls left untouched, wrong-tab binding, panel reconnect, worker recovery, browser restart and extension reload.
+The first installed-Edge attempt loaded the worker but failed before tests: its Fluent Developer mode switch differs from Chromium's accessible switch. The harness now checks the rendered Edge control's checked property. The next attempt passed sensitive-answer consent but found that the fixed footer could intercept the main action after scrolling. Controls now reserve scroll space for the sticky navigation and fixed footer; no forced clicks were added.
 
-Unit tests cover strict commands and sender boundaries, action/revision/document bindings, expiry/replay rejection, encryption and authenticated metadata, migration, passphrase rewrap, backup preview/restore, source-deletion rollback boundaries, date/experience/compensation calculations, exact memory scope, scoring, edit constraints, and provider URL/schema/response/redirect/error handling. Mocked transport tests do not prove live provider availability or semantic answer quality.
+The subsequent 51-scenario local run passed 49, including the previously failing backup. Two new recovery scenarios exposed a navigation/refresh race: the worker had paused on navigation before the panel received the latest revision, so inspection was rejected as stale. Read-only inspection now uses the latest serialized state; continuation additionally requires the intended application ID. Page writes still require the exact revision. Regression assertions explicitly reject a different application ID and a stale write while allowing a stale read-only inspection. The final complete CI run is recorded separately.
 
-## Issues resolved during this milestone
+## Test boundary and covered behavior
 
-- Reused React keys caused duplicate review panels; component keys now include unique component prefixes and the privacy-reset epoch.
-- Unlabeled or overbroad form labels confused accessibility and automation; explicit labels and landmarks were added.
-- Contact typing could race a pending import response; contact editing is disabled while the operation is committing.
-- PDF previews lacked local standard-font assets; the extension now bundles the required fonts and checks rendered text content.
-- Saved-vault unlock now resets the per-session AI-request budget while preserving encrypted profile data.
-- Updated import assertions distinguish the original document from the selected artifact. The test launcher also crashed once before execution and left a loopback fixture process; that verified process was stopped before the clean rerun. No scenario was removed to obtain a passing result.
+The production extension is copied into `.output/chrome-test`. Only its test manifest receives host grants for loopback and `https://jobs.lever.co/*`; the Lever scenario intercepts and locally fulfills all requests for its sanitized fixture. The release manifest has no unconditional host permissions. The package check compares all 14 non-manifest release files with this test copy when present; byte identity alone does not establish a passing test run.
 
-## Remaining release gates
+The panel HTML is opened in an extension tab. Installed-Edge smoke tests do not prove actual toolbar gestures, temporary activeTab grants, side-panel placement, optional-origin prompts, Chrome installation or Chromium 142 compatibility. Those interactive gates remain in the continuation checklist.
 
-Installed Chrome/Edge toolbar, side-panel, permission prompts and minimum-version smoke tests remain open. Automated axe results do not certify all dialog/error states, keyboard navigation, zoom or screen-reader behavior. DOCX needs Word/LibreOffice layout inspection; PDF accessibility tagging and broader multilingual shaping remain unimplemented.
+Coverage includes encrypted vault/backup/restart behavior, contact and career imports with rollback, source conflicts and preservation, profile provenance, scoped answers, document generation/reparse, local uploads, review choices, navigation/tab/permission interruptions and terminal counters. New cases cover explicit same-origin step journals, reload/worker uncertainty without retry, deferred/unknown decisions, reviewed native radio/checkbox groups, open shadow roots, the sanitized Lever structure and its disable switch, and sensitive-answer retention. Unit checks also cover provider configuration changes during asynchronous permission checks, exact numbers/evidence, labeled import ambiguity and capacity preservation.
 
-The suite contains more than 40 scenarios, but does not constitute 40 independently validated ATS variants. Named ATS adapters, server upload-acceptance evidence, safe nonterminal progression, repeated/custom controls and guarded submission remain separate implementation gates. The 200-question/30-resume-JD human-reviewed corpus, live-provider quality evaluation, performance distributions and usability pilot are incomplete. No 98% correctness, application-time or effort-reduction claim is made.
+Recognized answered sensitive fields are omitted from captured controls. AI drafting excludes recognized sensitive questions; approving a user-provided answer requires explicit journal retention. Such answers are excluded from receipts. Keyword recognition does not guarantee that arbitrary free text contains no sensitive content.
 
-Dependency inventory is in `DEPENDENCIES.json`; bundled notices are in `public/THIRD_PARTY_NOTICES.txt`. Some dependencies declare licenses without a root license file. Independent security and distribution/license review remain public-release gates. See `IMPLEMENTATION_STATUS.md` for the remaining work in dependency order.
+Generated PDF/DOCX text is reparsed against approved text. Synthetic long-content and glyph-boundary regressions run in the browser. Current one-page and all three long-content PDF preview pages were visually inspected: readable text, consistent margins and no observed clipping or overlap. This is a synthetic template check, not arbitrary resume-layout certification. DOCX office pagination, tagged PDF, broader script shaping, full keyboard/zoom/screen-reader review and independent security review remain open.
 
-## Artifacts and reproduction
+See [ATS_EVIDENCE.md](ATS_EVIDENCE.md) for the exact observed hostname, structure and unsupported widgets. Public read-only observation and intercepted fixtures do not establish live upload processing, all Lever tenants or real application success. No account creation, message, CAPTCHA interaction, paid provider request, real submission or browser-store publication was performed.
 
-- Chrome unpacked build: `.output/chrome-mv3`.
-- Edge unpacked build: `.output/edge-mv3`.
-- Release archive: `.output/applypilot-0.2.0-chrome.zip`.
-- Archive size: **1,326,643 bytes**.
-- SHA-256: `c6792052a579d38c907fbbbd4a2b4fcf600539e4b4c63153c52d284f3f5bd749`.
-- Generated browser report: `playwright-report/index.html`.
-- Synthetic UI capture: `docs/screenshots/application.png`.
-- Generated document fixtures and page images: `test-results/generated-resume.pdf`, `generated-resume.docx`, `generated-resume-preview.png`, `long-resume.pdf` and `long-resume-page-1.png` through `long-resume-page-3.png`. These are local QA outputs, not user documents.
+## Remote verification
 
-Run `pnpm check`, `pnpm test:e2e`, `pnpm build:edge`, then `pnpm zip`. Keep Developer mode enabled for unpacked installation. Never install or distribute `.output/chrome-test` or browser test profiles.
-
-Primary API references: [Chrome storage](https://developer.chrome.com/docs/extensions/reference/api/storage), [Chrome side panel](https://developer.chrome.com/docs/extensions/reference/api/sidePanel), [Playwright extension tests](https://playwright.dev/docs/chrome-extensions), [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs), [Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output), [pdf-lib](https://pdf-lib.js.org/) and [docx](https://docx.js.org/). Documentation establishes contracts; observed results and limits are stated above.
+The reviewed continuation will be pushed to the existing repository after local checks. The new CI outcome will be linked here when available.

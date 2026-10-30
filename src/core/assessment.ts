@@ -69,6 +69,8 @@ export function readability(text: string) {
     { check: 'Email detected', status: /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/.test(text) ? 'Passed' : 'Needs attention', detail: 'A syntactic check only; no address verification.' },
     { check: 'Section headings', status: /\b(experience|education|projects|skills)\b/i.test(text) ? 'Passed' : 'Needs attention', detail: 'Recognizable text headings help readers; this does not guarantee ATS behavior.' },
     { check: 'Unfinished placeholders', status: /\[(?:insert|add|your|metric|company)[^\]]*\]/i.test(text) ? 'Needs attention' : 'Passed', detail: 'Checks common bracketed placeholders.' },
+    { check: 'Date text', status: /\b(?:19|20)\d{2}\b/.test(text) ? 'Passed' : 'Could not assess', detail: 'Detects year text only. Chronology and overlapping roles need review; no dates are inferred.' },
+    { check: 'Document integrity', status: 'Could not assess', detail: 'Text alone cannot verify original file integrity. Generated derivatives have a separate exact-text reparse check.' },
     { check: 'Reading order, visual layout and language', status: 'Could not assess', detail: 'Review the original document visually. Plain-text extraction cannot establish clipping, reading order or every glyph.' }
   ];
 }

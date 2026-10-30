@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Synthetic Employer — Engineer</title><style>body{font:16px system-ui;padding:30px}label,.application-label{display:block;margin:12px 0}input,textarea{padding:8px}li{list-style:none}input[type=checkbox]{width:auto}</style></head><body>
+<h1>Synthetic Engineer</h1><p>SANITIZED FIXTURE — no real application</p>
+<form id="application-form" onsubmit="event.preventDefault();window.submissions++">
+<label><div class="application-label">Full name<span>✱</span></div><div class="application-field"><input type="text" data-qa="name-input" name="name" required></div></label>
+<label><div class="application-label">Email<span>✱</span></div><div class="application-field"><input type="email" name="email" required></div></label>
+<div><div class="application-label full-width multiple-select"><div class="text">Please check all that apply:</div></div><div class="application-field full-width"><ul data-qa="checkboxes"><li><label><input type="checkbox" name="cards[synthetic][field0]" value="Friend"><span>Friend</span></label></li><li><label><input type="checkbox" name="cards[synthetic][field0]" value="Other"><span>Other</span></label></li></ul></div></div>
+<label>Resume/CV<input type="file" name="resume" accept=".pdf,.docx"></label>
+<button id="btn-submit" type="submit">Submit application</button>
+</form><script>window.submissions=0;</script></body></html>

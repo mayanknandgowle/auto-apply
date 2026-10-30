@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 — 30 October 2026
+
+- Add reviewed native choices, open shadow roots, persistent deferred/unknown decisions and an experimental Lever form interpreter.
+- Retain explicitly linked application steps and prevent uncertain writes/uploads from repeating after reload or restart; gate filling during panel reconnection.
+- Add separate job-source/conflict review, labeled career-import merge/rollback, source excerpts and expanded profile records.
+- Add grounded resume evidence proposals, stronger derivative checks, explicit sensitive-answer retention and provider revalidation.
+- Diagnose the historical worker-restart CI failure; strengthen regression checks and verify ZIP contents in CI.
+- Keep all navigation and submission manual. Live adapter/provider validation and full Milestone 0–3 completion remain open.
+
 ## 0.2.0 — 29 October 2026 — internal alpha
 
 - Added structured career records, precise experience/pay helpers, contact-import rollback and source-deletion provenance.

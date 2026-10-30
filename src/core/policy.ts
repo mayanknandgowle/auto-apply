@@ -9,7 +9,7 @@ const aliases: Record<string, ProfileKey> = {
   github: 'github', 'github url': 'github', portfolio: 'portfolio', 'portfolio url': 'portfolio', 'personal website': 'portfolio'
 };
 export function normalizeLabel(label: string) {
-  return label.toLowerCase().replace(/[＊*]/g, '').replace(/\((?:required|optional)\)/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  return label.toLowerCase().replace(/[＊*✱]/g, '').replace(/\((?:required|optional)\)/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 }
 export function mapField(control: Control): ProfileKey | undefined {
   if (!['text', 'email', 'tel', 'url', 'select', 'textarea'].includes(control.kind)) return;
@@ -34,13 +34,17 @@ export function resolveValue(control: Control, profile: Profile): string | undef
   return value;
 }
 export function manualOnly(control: Control) {
-  return ['file', 'unsupported', 'checkbox', 'radio'].includes(control.kind) || /\b(password|one.time|otp|captcha|signature|certify|attest|agree|consent|credit card|bank account|social security|ssn)\b/i.test(control.label);
+  return control.disabled || ['file', 'unsupported'].includes(control.kind) || (['checkbox', 'radio'].includes(control.kind) && !control.choice?.writable) || /\b(password|one.time|otp|captcha|signature|certify|attest|agree|consent|terms|privacy|acknowledge|declaration|credit card|bank account|social security|ssn|gender|race|ethnicity|disability|veteran|religion|sexual orientation)\b/i.test(control.label);
 }
+export const hasValue = (control: Control) => control.choice ? control.choice.selected : !!control.value;
 export function explanation(control: Control, hindi = false): string {
   if (manualOnly(control)) return hindi ? 'इस प्रश्न को वेबसाइट पर खुद पूरा करें, फिर दोबारा जाँचें।' : 'Complete this control on the website, then inspect again. Uploads, agreements and unsupported controls need your review.';
   if (/sponsor/i.test(control.label)) return hindi ? 'यह भविष्य में नियोक्ता की वीज़ा सहायता के बारे में है। मौजूदा कार्य अनुमति से इसका उत्तर तय नहीं होता।' : 'This asks about employer sponsorship. Current work authorization does not establish whether you need future sponsorship.';
   if (/authori[sz]|eligible.*work/i.test(control.label)) return hindi ? 'निर्दिष्ट देश में अपनी वास्तविक कार्य अनुमति के अनुसार उत्तर दें।' : 'Answer for the country and time frame stated. Location or nationality alone does not establish work authorization.';
   if (/salary|compensation|ctc|pay\b/i.test(control.label)) return hindi ? 'मुद्रा, सालाना या मासिक रकम, और वर्तमान या अपेक्षित वेतन जाँचें।' : 'Check currency, annual versus monthly amount, fixed versus total pay, and current versus expected compensation.';
+  if (/experience|internship|project/i.test(control.label)) return hindi ? 'नौकरी, इंटर्नशिप और प्रोजेक्ट का अनुभव अलग रखें। कौशल के वर्षों का अनुमान न लगाएँ।' : 'Keep professional, internship and project experience separate. General employment does not establish years using a specific skill.';
+  if (/education|degree|graduat/i.test(control.label)) return hindi ? 'पूरी हुई शिक्षा और अपेक्षित डिग्री में अंतर रखें। मूल तिथि और ग्रेड स्केल जाँचें।' : 'Distinguish a completed degree from expected graduation. Preserve the original date precision and grade scale.';
+  if (/notice|joining|start date|availab/i.test(control.label)) return hindi ? 'नोटिस अवधि और काम शुरू करने की तारीख अलग हैं। पुष्टि के बिना एक से दूसरा न निकालें।' : 'Notice duration and earliest joining date are different facts. Do not derive one from the other without confirmed conditions.';
   return hindi ? 'मूल प्रश्न और सभी विकल्प पढ़ें। केवल सत्यापित जानकारी दें; अनिश्चित होने पर वेबसाइट पर पूरा करें।' : 'Read the complete question and exact options. Use your own verified information; leave unknown facts unresolved.';
 }
 export function trustedUi(sender: chrome.runtime.MessageSender, extensionId: string, origin: string): boolean {

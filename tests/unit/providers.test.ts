@@ -1,9 +1,25 @@
 import { describe,it,expect,vi,afterEach } from 'vitest';
-import { providerRequest,providerUrl } from '../../src/providers/transport';
+import { providerRequest,providerUrl,runProviderDraft } from '../../src/providers/transport';
+import type { AiTask } from '../../src/providers/gemini';
 import { approvedText,proposeEdits } from '../../src/documents/edits';
 const config={kind:'openai' as const,endpoint:'',model:'synthetic-model'};
 afterEach(()=>vi.unstubAllGlobals());
 describe('provider protocol boundaries',()=>{
+  const task:AiTask={id:crypto.randomUUID(),controlId:'test',generation:1,profileRevision:1,documentToken:crypto.randomUUID(),snapshotId:crypto.randomUUID(),model:config.model,kind:config.kind,endpoint:'',question:'Why this role?',evidence:[],jobText:'Synthetic'};
+  it('does not transmit when the key binding changes during permission verification',async()=>{
+    const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
+    vi.stubGlobal('chrome',{storage:{session:{get:vi.fn().mockResolvedValueOnce({providerKey:'synthetic',providerBinding:JSON.stringify(config)}).mockResolvedValueOnce({providerKey:'new-synthetic',providerBinding:JSON.stringify(config)})}},permissions:{contains:vi.fn().mockResolvedValue(true)}});
+    await expect(runProviderDraft(task,new AbortController().signal)).rejects.toThrow('configuration changed');expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('revoked exact-origin permission and cancellation prevent dispatch',async()=>{
+    const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
+    const contains=vi.fn().mockResolvedValue(false);
+    vi.stubGlobal('chrome',{storage:{session:{get:vi.fn().mockResolvedValue({providerKey:'synthetic',providerBinding:JSON.stringify(config)})}},permissions:{contains}});
+    await expect(runProviderDraft(task,new AbortController().signal)).rejects.toThrow('revoked');
+    expect(contains).toHaveBeenCalledWith({origins:['https://api.openai.com/*']});
+    contains.mockResolvedValue(true);const controller=new AbortController();controller.abort();
+    await expect(runProviderDraft(task,controller.signal)).rejects.toThrow('cancelled');expect(fetcher).not.toHaveBeenCalled();
+  });
   it('OpenAI uses fixed Responses URL, bearer auth, strict JSON, no storage and no redirects',async()=>{
     const fetcher=vi.fn().mockResolvedValue(new Response(JSON.stringify({status:'completed',output:[{type:'message',content:[{type:'output_text',text:'{"answer":"fixture"}'}]}]})));vi.stubGlobal('fetch',fetcher);
     expect(await providerRequest(config,'synthetic-key','fixture',new AbortController().signal)).toEqual({answer:'fixture'});
@@ -40,5 +56,10 @@ describe('approved resume changes',()=>{
     expect(()=>approvedText(original,edits,[])).toThrow('number or date');
     const id=crypto.randomUUID();edits[1]!.evidenceIds=[id];expect(approvedText(original,edits,[{id,text:'Built 50 tools.'}])).toContain('50');
     edits[1]!.after='Built [insert metric] tools.';expect(()=>approvedText(original,edits,[{id,text:'Built 50 tools.'}])).toThrow('placeholders');
+  });
+  it('cannot support 20 with 2024 or silently add an uncited skill',()=>{
+    const edits=proposeEdits(original).map(e=>({...e,approved:true}));
+    edits[1]!.after='Built 20 tools.';expect(()=>approvedText(original,edits,[])).toThrow('number or date');
+    edits[1]!.after='Built a Rust tool in 2024.';expect(()=>approvedText(original,edits,[])).toThrow('supporting evidence');
   });
 });
