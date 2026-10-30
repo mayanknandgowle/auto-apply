@@ -8,7 +8,7 @@ Version 0.2.1 remains a local internal build. Store publication and real employe
 - [x] Source/original preservation, reviewed derivatives and honest capability labels.
 - [x] Synthetic browser harness and unit/security/domain tests.
 - [x] Updated installation, privacy, security, requirement and support documentation.
-- [ ] Final 0.2.1 build/test/archive and remote CI results recorded in VERIFICATION.md.
+- [x] Final 0.2.1 checks recorded in VERIFICATION.md: 86 local unit tests, 51/51 full Linux CI browser scenarios, two post-fix Windows recovery regressions, two installed-Edge smoke scenarios, both builds and package integrity. Interactive browser sign-off remains separate below.
 - [ ] Installed Chrome/Edge toolbar, side-panel, host-consent and minimum-version checks.
 - [ ] Live provider connection/structured-output/quality evaluation with synthetic data and local credentials.
 - [ ] Named ATS normal-flow/upload acceptance and terminal-boundary validation.

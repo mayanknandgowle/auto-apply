@@ -15,14 +15,15 @@ Windows x64; Node 24.15.0; pnpm 11.25.0; WXT 0.21.5; TypeScript 7.0.2; Playwrigh
 | ZIP package | 15 files, 1,337,734 bytes; version 0.2.1; every archive file matches the release directory and all 14 non-manifest release files match the test copy |
 | Production dependency audit | No known vulnerabilities reported on 30 October 2026; not a complete security review |
 | Full local Chromium integration suite | 49/51 passed in 11.5 minutes before the inspection revision-race fix; the two failures are explained below |
+| Final full Linux CI suite | 51/51 passed in 1.5 minutes on the implementation commit, zero retries or skips |
 | Post-fix local browser regressions | Both failed recovery scenarios pass (2/2, 1.4 minutes), including wrong-application and stale-write rejection; zero retries |
-| Installed Edge smoke tests | 2/2 passed in 58.5 seconds, zero retries: normal native/dependent filling with no navigation, and sensitive-answer retention/receipt exclusion |
+| Installed Edge smoke tests | 2/2 passed on the final committed build in 50.6 seconds, zero retries: normal native/dependent filling with no navigation, and sensitive-answer retention/receipt exclusion |
 | Accessibility | Automated axe checks cover tested Apply/Profile/Resume/Settings and review states; manual audit remains open |
 | DOCX office layout | Unverified: packaged renderer cannot locate LibreOffice. Word 16.0.19328.20190 is installed but native control could not activate its minimized window. Text reparse is tested separately. |
 | Live providers | Not run: no locally supplied credentials and provider-specific paid-use authorization established |
 | Live ATS | One public Lever application structure observed read-only in installed Edge; no filling, attachment or submission |
 
-ZIP SHA-256: `895575d6f40db1fc634984f217db44f51a2306c8990cd8efca800a34aeeb930e`. Local ZIPs, browser profiles, traces and generated applicant artifacts are ignored and excluded from source commits.
+Windows local ZIP SHA-256: `895575d6f40db1fc634984f217db44f51a2306c8990cd8efca800a34aeeb930e`. Local ZIPs, browser profiles, traces and generated applicant artifacts are ignored and excluded from source commits.
 
 ## Baseline and failure investigation
 
@@ -52,4 +53,4 @@ See [ATS_EVIDENCE.md](ATS_EVIDENCE.md) for the exact observed hostname, structur
 
 ## Remote verification
 
-The reviewed continuation will be pushed to the existing repository after local checks. The new CI outcome will be linked here when available.
+Implementation commit `d920295a897f154710aeb63223fb82b0c9ae97eb` was pushed to `main`. [GitHub Actions run 41004969933](https://github.com/mayanknandgowle/auto-apply/actions/runs/41004969933) completed successfully. The Linux job passed typecheck/unit/bundle checks, all 51 Chromium browser scenarios (1.5 minutes), Edge build, ZIP creation and package verification. Its package contains 15 files (1,336,576 bytes), SHA-256 `bb29f7ac52fe9a0cb1bb35333036d6cc162e1b2a49aa4fe3dbbf0084a8841cf1`. All 14 non-manifest files match the browser-tested copy on that runner. Windows and Linux package hashes are recorded separately; cross-platform byte-reproducibility is not claimed.
